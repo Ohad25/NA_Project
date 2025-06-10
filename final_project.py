@@ -10,8 +10,8 @@ from numpy import random
 from scipy.signal import welch, spectrogram
 
 #Hyperparameters
-start_fixation = 2 #seconds
-end_fixation = 6  # seconds
+start_fixation = 2.15 #seconds - When Beep  was heard
+end_fixation = 6  # seconds - End of imagination
 
 with open(r'C:\Users\user\Desktop\Neuron\Task-5\motor_imagery_train_data.npy', 'rb') as f:  # TODO - add the file path!
     train_data = np.load(f,allow_pickle=True)
@@ -66,31 +66,36 @@ def calculate_power_spectrum(data_left,data_right,channel:int, fs:int,plot_limit
     channel: int, channel index to analyze (0 for C3, 1 for C4)
     fs: sampling frequency of the EEG data
     plot_limit: tuple containing the start and end of Hz range to plot the power spectrum"""
-    signal_left = data_left[:, :, channel]  # C3 channel
-    signal_right = data_right[:, :, channel]  # C4 channel
-    
     trial_start = int(start_fixation * fs)
     trial_end = int(end_fixation * fs)
-    ff3, pxx_left = welch(signal_left[:,trial_start:trial_end], fs, nperseg=256,axis=1)
-    _, pxx_right = welch(signal_right[:,trial_start:trial_end], fs, nperseg=256,axis=1) #ff4 not needed because its equal to ff3
+    signal_left = data_left[:, trial_start:trial_end, channel]  # C3 channel
+    signal_right = data_right[:,trial_start:trial_end, channel]  # C4 channel
+
+    signal_left_mean = np.mean(signal_left,axis=0)
+    signal_right_mean = np.mean(signal_right,axis=0)
+    
+
+    ff3, pxx_left = welch(signal_left_mean, fs, nperseg=256,noverlap=128)
+    _, pxx_right = welch(signal_right_mean, fs, nperseg=256,noverlap=128) #ff4 not needed because its equal to ff3
     
     strat_freq = plot_limit[0]
     end_freq = plot_limit[1]
     mask = (ff3 >= strat_freq) & (ff3 <= end_freq) #Take only the frequencies in the specified range
+    ff3_masked = ff3[mask]
+    pxx_left = pxx_left[mask]
+    pxx_right = pxx_right[mask]
 
-    mean_pxx_left = np.mean(pxx_left[:,mask], axis=0)
-    mean_pxx_right = np.mean(pxx_right[:,mask], axis=0)
-
-    std_pxx_left = np.std(pxx_left[:,mask], axis=0)
-    std_pxx_right = np.std(pxx_right[:,mask], axis=0)
+    std_pxx_left = np.std(pxx_left, axis=0)
+    std_pxx_right = np.std(pxx_right, axis=0)
 
     # Plotting the power spectrum for C3 and C4 channels
 
     plt.figure(figsize=(12, 6))
-    plt.plot(ff3[mask], mean_pxx_left, label='Left Channel', color='blue')
-    plt.plot(ff3[mask], mean_pxx_right, label='Right Channel', color='orange')
-    plt.fill_between(ff3[mask], mean_pxx_left - std_pxx_left, mean_pxx_left + std_pxx_left, alpha=0.3)
-    plt.fill_between(ff3[mask], mean_pxx_right - std_pxx_right, mean_pxx_right + std_pxx_right, alpha=0.3)
+
+    plt.plot(ff3_masked, pxx_left, label='Left Hand', color='blue')
+    plt.plot(ff3_masked, pxx_right, label='Right Hand', color='orange')
+    plt.fill_between(ff3_masked, pxx_left - std_pxx_left, pxx_left + std_pxx_left, alpha=0.3)
+    plt.fill_between(ff3_masked, pxx_right - std_pxx_right, pxx_right + std_pxx_right, alpha=0.3)
 
 
     plt.title(f'Power Spectrum of EEG Data channel {channel+3}')
@@ -100,21 +105,30 @@ def calculate_power_spectrum(data_left,data_right,channel:int, fs:int,plot_limit
     plt.grid()
     plt.show()
 
-    return mean_pxx_left, mean_pxx_right
+    return pxx_left, pxx_right
 
 
 def create_spectogram(data1,data2, fs, channel,difference=False,baseline=False):
-    """Creates a spectrogram of the EEG data for a specific channel."""
-    signal_left = data1[:, :, channel]  # Select the specified channel
+    """Creates a spectrogram of the EEG data for a specific channel.
+    data1 = EEG data of imagining left hand
+    data2 = EEG data imagining right hand
+    WARNING:TODO:If we substract we need to convert it to dB first so it will be in log scale."""
+    #Mean over trials:
+    signal_left = np.mean(data1,axis=0)
+    signal_right = np.mean(data2,axis=0)
+    signal_left = signal_left[:, channel]  # Select the specified channel
+    signal_right = signal_right[:, channel]  # Select the specified channel
+
     f, t, Sxx_left = spectrogram(signal_left, fs=fs, nperseg=256)
-    signal_right = data2[:, :, channel]  # Select the specified channel
     f2, t2, Sxx_right = spectrogram(signal_right, fs=fs, nperseg=256)
+
+    #Sxx_left = 10* np.log10(Sxx_left + 1e-10)  # Convert to dB, add small value to avoid log(0)
+    #Sxx_right = 10* np.log10(Sxx_right + 1e-10)  # Convert to dB, add small value to avoid log(0)
 
     #Spectogram for substraction of left and right channels
     if difference:
         Sxx_diff = Sxx_left - Sxx_right # Calculate the difference between left and right spectrograms
-        mean_Sxx_diff = np.mean(Sxx_diff, axis=0)  # Average across trials
-        data_Sxx = [(mean_Sxx_diff,'Difference Spectrogram (left - right)')]
+        data_Sxx = [(Sxx_diff,'Difference Spectrogram (left - right)')]
 
     #Spectogram for left and right channels  #TODO: mean over all spectogram.  
     elif baseline:    
@@ -126,30 +140,24 @@ def create_spectogram(data1,data2, fs, channel,difference=False,baseline=False):
         trail_baseline_left = np.mean(baseline_left, axis=0) 
         trail_baseline_right = np.mean(baseline_right, axis=0) 
 
-        # Average across trials the Sxx
-        mean_Sxx_left= np.mean(Sxx_left, axis=0)  
-        mean_Sxx_right = np.mean(Sxx_right, axis=0)
-
-        difference_Sxx_left = mean_Sxx_left - trail_baseline_left
-        difference_Sxx_right = mean_Sxx_right - trail_baseline_right
+        difference_Sxx_left = Sxx_left - trail_baseline_left
+        difference_Sxx_right = Sxx_right - trail_baseline_right
         data_Sxx = [(difference_Sxx_left,'Left (Substraction from baseline (1 [sec]))'), (difference_Sxx_right,'Right (Substraction from baseline (1 [sec]))')]
 
     #Baseline period
     else:
-        mean_Sxx_left= np.mean(Sxx_left, axis=0)  # Average across trials
-        mean_Sxx_right = np.mean(Sxx_right, axis=0)
-        data_Sxx = [(mean_Sxx_right,'Left'), (mean_Sxx_left,'Right')]
+        data_Sxx = [(Sxx_left,'Left'), (Sxx_right,'Right')]
 
     fig, axes = plt.subplots(len(data_Sxx),1, figsize=(15, 10))
 
-    for i ,Sxx in enumerate(data_Sxx):
+    for i ,Sxx in enumerate(data_Sxx): 
         ax = axes[i] if len(data_Sxx) > 1 else axes
         mean_Sxx, label = Sxx
         im = ax.pcolormesh(t, f, mean_Sxx, shading='gouraud', cmap='jet') #To change it to --> dB 10 * np.log10(mean_Sxx + 1e-10)
         ax.set_title(f'Spectrogram for Channel {channel} ({label})')
         ax.set_ylabel('Frequency [Hz]')
         ax.set_xlabel('Time [s]')
-        ax.set_ylim(0, 20)  # Limit the frequency range to 0-60 Hz
+        ax.set_ylim(0, 2)  # Limit the frequency range 
 
         cbar = fig.colorbar(im)
         cbar.set_label('power per Hz ', fontsize=12) #If you change to decibels, change this to 'dB'
@@ -163,14 +171,15 @@ def create_spectogram(data1,data2, fs, channel,difference=False,baseline=False):
 
 
 
+#TODO:Remeber to plot the channel in subplots and not seperatly
 def main():
-    plot_EEG(train_left, fs, 'Training Data',(0,'C3-Left'))
-    plot_EEG(train_left, fs, 'Training Data',(1,'C4-Left'))
-    plot_EEG(train_right, fs, 'Training Data',(0,'C3-Right'))
-    plot_EEG(train_right, fs, 'Training Data',(1,'C4-Right'))
+    #plot_EEG(train_left, fs, 'Training Data',(0,'C3-Left'))
+    #plot_EEG(train_left, fs, 'Training Data',(1,'C4-Left'))
+    #plot_EEG(train_right, fs, 'Training Data',(0,'C3-Right'))
+    #plot_EEG(train_right, fs, 'Training Data',(1,'C4-Right'))
 
-    mean_ppxleft3, mean_pxxright3 = calculate_power_spectrum(train_left,train_right,channel=0,fs=fs,plot_limit=(0, 60))
-    mean_ppxleft4, mean_pxxright4 = calculate_power_spectrum(train_left,train_right,channel=1,fs=fs,plot_limit=(0, 60))
+    mean_ppxleft3, mean_pxxright3 = calculate_power_spectrum(train_left,train_right,channel=0,fs=fs,plot_limit=(0, 30))
+    mean_ppxleft4, mean_pxxright4 = calculate_power_spectrum(train_left,train_right,channel=1,fs=fs,plot_limit=(0, 30))
 
 if __name__ == "__main__":
     main()
