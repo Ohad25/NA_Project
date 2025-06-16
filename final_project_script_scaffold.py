@@ -193,12 +193,26 @@ def main():
 
 if __name__ == "__main__":
     #main()
-    #Recall channel 0 is C3 and channel 1 is C4
-    #Spectorgram for C3 and C4 channels left and right hand movements
+
+    psd_left3_tuple, psd_right3_tuple = calculate_power_spectrum(train_left,train_right,channel=0,fs=fs) # C3 channel return (ff3, pxx_left), (ff4, pxx_right)
+    psd_left4_tuple, psd_right4_tuple = calculate_power_spectrum(train_left,train_right,channel=1,fs=fs) # C4 channel return (ff3, pxx_left), (ff4, pxx_right)
+
+    # Extract psd information from each hand and each channel
+    ff3, pxx_left3 = psd_left3_tuple
+    ff4, pxx_left4 = psd_left4_tuple
+    _, pxx_right3 = psd_right3_tuple
+    _, pxx_right4 = psd_right4_tuple
+
+
+    plot_power_spectrum(ff3,pxx_left3,pxx_right3,trial_num=0,channel=0, plot_limit=(0, 30),mean=True)  # C3 channel
+    plot_power_spectrum(ff4,pxx_left4,pxx_right4, trial_num=0,channel=1, plot_limit=(0, 30),mean=True)  # C4 channel
+
+
+
     sg3_info = create_spectogram(train_left,train_right, fs, channel=0)  # C3 channel
     sg4_info = create_spectogram(train_left,train_right, fs, channel=1)  # C4 channel
 
-    data_sg = ['baseline_left']  # Data to plot
+    data_sg = ['baseline_left','baseline_right','left'] #data_sg can be a subset of the keys in sg3_info and sg4_info (e.i. 'left', 'right','baseline_left','baseline_right' ,'difference')
     plot_spectogram(sg3_info, data_sg,channel=3,trial=0 ,mean=True)  # C3 channel
 
     #TODO: Compare the power spectra of both classes. Are there any frequency bands that seem useful for separating the classes?
