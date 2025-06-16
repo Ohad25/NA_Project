@@ -117,8 +117,6 @@ def create_spectogram(data1,data2, fs, channel,baseline=1):
     output['difference'] = (f, t, Sxx_diff)
     output['baseline_left'] = (f, t, Sxx_left - baseline_Sxx_left)
     output['baseline_right'] = (f2, t2, Sxx_right - baseline_Sxx_right)
-
-
     return output
 
 
@@ -175,20 +173,6 @@ def main():
     plot_power_spectrum(ff3,pxx_left3,pxx_right3,trial_num=0,channel=0, plot_limit=(0, 30),mean=True)  # C3 channel
     plot_power_spectrum(ff4,pxx_left4,pxx_right4, trial_num=0,channel=1, plot_limit=(0, 30),mean=True)  # C4 channel
 
-    #Channel 3 features 
-    feature_left = psd_feature(ff3,pxx_left3,fs, (15, 20))
-    print("Feature vector for left hand movement:", feature_left)
-
-    feature_right = psd_feature(ff3,pxx_right3,fs, (15, 20))
-    print("Feature vector for right hand movement:", feature_right)
-
-    #Channel 4 features
-    feature_left4 = psd_feature(ff4,pxx_left4,fs, (7, 12))
-    print("Feature vector for left hand movement C4 channel:", feature_left4)
-
-    feature_right4 = psd_feature(ff4,pxx_right4,fs, (7, 12))
-    print("Feature vector for right hand movement C4 channel:", feature_right4)
-
 
 
 if __name__ == "__main__":
@@ -204,16 +188,40 @@ if __name__ == "__main__":
     _, pxx_right4 = psd_right4_tuple
 
 
-    plot_power_spectrum(ff3,pxx_left3,pxx_right3,trial_num=0,channel=0, plot_limit=(0, 30),mean=True)  # C3 channel
-    plot_power_spectrum(ff4,pxx_left4,pxx_right4, trial_num=0,channel=1, plot_limit=(0, 30),mean=True)  # C4 channel
+    #plot_power_spectrum(ff3,pxx_left3,pxx_right3,trial_num=0,channel=0, plot_limit=(0, 30),mean=True)  # C3 channel
+    #plot_power_spectrum(ff4,pxx_left4,pxx_right4, trial_num=0,channel=1, plot_limit=(0, 30),mean=True)  # C4 channel
 
+        #Channel 3 features 
+    """feature_left = psd_feature(ff3,pxx_left3,fs, (15, 20))
+    print("Feature vector for left hand movement:", feature_left)
 
+    feature_right = psd_feature(ff3,pxx_right3,fs, (15, 20))
+    print("Feature vector for right hand movement:", feature_right)
 
+    #Channel 4 features
+    feature_left4 = psd_feature(ff4,pxx_left4,fs, (7, 12))
+    print("Feature vector for left hand movement C4 channel:", feature_left4)
+
+    feature_right4 = psd_feature(ff4,pxx_right4,fs, (7, 12))
+    print("Feature vector for right hand movement C4 channel:", feature_right4)"""
+
+    """From Spectogram"""
     sg3_info = create_spectogram(train_left,train_right, fs, channel=0)  # C3 channel
     sg4_info = create_spectogram(train_left,train_right, fs, channel=1)  # C4 channel
 
     data_sg = ['baseline_left','baseline_right','left'] #data_sg can be a subset of the keys in sg3_info and sg4_info (e.i. 'left', 'right','baseline_left','baseline_right' ,'difference')
-    plot_spectogram(sg3_info, data_sg,channel=3,trial=0 ,mean=True)  # C3 channel
+    #plot_spectogram(sg3_info, data_sg,channel=3,trial=0 ,mean=True)  # C3 channel
+
+    f_bl ,t_bl, Sxx_bl_left = sg3_info['baseline_left']  # Get the baseline left spectrogram
+    f_br, t_br, Sxx_br_right = sg3_info['baseline_right']  # Get the baseline right spectrogram
+
+    feature_left_bl = psd_feature(f_bl, Sxx_bl_left, fs, (15, 20))  # Calculate feature vector for left hand movement in baseline
+    print("Feature vector for left hand movement in baseline C3 channel:", feature_left_bl)
+    feature_right_bl = psd_feature(f_br, Sxx_br_right, fs, (15, 20))  # Calculate feature vector for right hand movement in baseline
+    print("Feature vector for right hand movement in baseline C3 channel:", feature_right_bl)
+
+    print("""Length of feature vector for left hand movement in baseline C3 channel: {}""".format(len(feature_left_bl[0]))) #output is power for each time
+    print("""Length of feature vector for right hand movement in baseline C3 channel: {}""".format(len(feature_right_bl[0]))) #output is power for each time
 
     #TODO: Compare the power spectra of both classes. Are there any frequency bands that seem useful for separating the classes?
 
