@@ -12,6 +12,9 @@ import torch
 from plot_creation import plot_power_spectrum, plot_spectrogram,plot_PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import KFold, cross_val_score
+from sklearn.metrics import accuracy_score
+import random
+
 #Hyperparameters
 start_fixation = 2.15 #seconds - When Beep  was heard
 end_fixation = 6  # seconds - End of imagination
@@ -305,10 +308,10 @@ def create_feature_vector(time_segment, frequency_bands,train_left, train_right,
     ch3_feature_list_left = []
     ch3_feature_list_right = []
     
-
-    #np.empty((2,2,64,)) # shape (channels,hand,trials,features)
-    X_time_left_ch3, X_time_right_ch3 = time_feature(train_left,train_right,channel=0).reshape(2,64,2)  # shape: (n_trials, 2)
-    X_time_left_ch4, X_time_right_ch4 = time_feature(train_left,train_right,channel=1).reshape(2,64,2)  # shape: (n_trials, 2)
+    
+    trials_size = psd_left3.shape[0]
+    X_time_left_ch3, X_time_right_ch3 = time_feature(train_left,train_right,channel=0).reshape(2,trials_size,2)  # shape: (n_trials, 2)
+    X_time_left_ch4, X_time_right_ch4 = time_feature(train_left,train_right,channel=1).reshape(2,trials_size,2)  # shape: (n_trials, 2)
     total_feature += X_time_left_ch3.shape[1]  # Add time features to total feature count
     
     for seg, (ff3, psd_left3, psd_right3) in channel_3.items():
@@ -345,7 +348,7 @@ def create_feature_vector(time_segment, frequency_bands,train_left, train_right,
     print("Length of feature vectors for C4 channel for each hand:", len(ch4_feature_list_right))
     print("\nFeature vectors calculated successfully.\n")
 
-    #Conctate everything: 
+    #Concertante everything: 
     channel_3_left = np.concatenate([np.array(ch3_feature_list_left).T, X_time_left_ch3,np.array([entropy_left3]).T], axis=1)  # shape: (n_trials, n_features_total)
     channel_3_right = np.concatenate([np.array(ch3_feature_list_right).T, X_time_right_ch3,np.array([entropy_right3]).T], axis=1)
     channel_4_left = np.concatenate([np.array(ch4_feature_list_left).T, X_time_left_ch4,np.array([entropy_left4]).T], axis=1)  # shape: (n_trials, n_features_total)
@@ -386,6 +389,35 @@ def calculate_PCA(features_left, features_right, n_components=3):
 
     return X_pca, y, pca
 
+def cross_validate_LDA(X_train_val, y_train_val, k=10):
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X_train_val)
+
+    lda = LinearDiscriminantAnalysis()
+    kf = KFold(n_splits=k, shuffle=True, random_state=42)
+
+    scores = cross_val_score(lda, X_scaled, y_train_val, cv=kf)
+
+    print(f"{k}-Fold CV Accuracy on training set: {np.mean(scores)*100:.2f} ± {np.std(scores)*100:.2f}%")
+
+    return lda, scaler  # return model and scaler for final training
+
+
+def train_and_test_on_holdout(X_train_val, y_train_val, X_test, y_test, scaler, lda):
+    # Scale training and test data
+    #X_train_scaled = scaler.fit_transform(X_train_val)
+    #X_test_scaled = scaler.transform(X_test)
+
+    # Train on all training data
+    lda.fit(X_train_val, y_train_val)
+
+    # Predict
+    y_test_pred = lda.predict(X_test)
+    test_acc = accuracy_score(y_test, y_test_pred)
+
+    print(f"Test Accuracy on held-out set: {test_acc * 100:.2f}%")
+    return test_acc
+
 
 #TODO:Remember to plot the channel in subplots and not separately
 def main():
@@ -409,10 +441,26 @@ def main():
 if __name__ == "__main__":
     #main()
     #Power Spectrum divided into time segments (1.5 seconds)
-    segment = [(1.5, 3.0), (3.0, 4.5), (4.5, 6)]  # Define time segments for analysis
-    frequency_bands = [(6,12), (12,15), (15,20),(20,25) ,(25,30)]  # Define frequency bands for analysis
+    segment = [(1.0, 2.0),(2.0,3.0) ,(4.0, 5.0), (5, 6)]  # Define time segments for analysis
+    frequency_bands = [(6,12),(12,15), (15,20),(20,25) ,(25,30)]  # Define frequency bands for analysis
 
     left_features, right_feature = create_feature_vector(segment, frequency_bands, train_left, train_right, fs)
 
-    X_pca, y, pca = calculate_PCA(left_features, right_feature, n_components=2)
-    plot_PCA(X_pca, y)
+    n_components = 10
+    X_pca, y, pca = calculate_PCA(left_features, right_feature, n_components=n_components)
+    if n_components < 4:
+        plot_PCA(X_pca, y)
+    
+    X = np.concatenate((left_features, right_feature),axis=0) # shape: (n_trials_total, n_features_total)            
+    y = np.array([0]*len(left_features) + [1]*len(right_feature))  # 0 = LEFT, 1 = RIGHT
+    
+    #Split into train and validation but generate random state
+    rnd_state = random.randint(0, 10000)
+    
+    X_train_val, X_test, y_train_val, y_test = train_test_split(
+        X_pca, y, test_size=0.2, stratify=y, random_state=rnd_state
+    )
+
+    lda, scaler = cross_validate_LDA(X_train_val, y_train_val, k=10)
+
+    test_acc = train_and_test_on_holdout(X_train_val, y_train_val, X_test, y_test, scaler, lda)
