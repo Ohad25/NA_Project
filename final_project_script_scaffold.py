@@ -58,7 +58,7 @@ def plot_EEG(data, fs, title,channel_tuple):
 #TODO: Eyeball the data and see if you can identify qualitative differences between the different classes.
 
 #Step 2
-def calculate_power_spectrum(data_left,data_right,channel:int, fs:int):
+def calculate_power_spectrum(data_left,data_right,channel:int, fs:int,time_segment:tuple=(start_fixation, end_fixation)):
     """Calculates the power spectrum of the EEG data using Welch's method.
     This function calculates for C3 and C4 channels.
     args: 
@@ -69,17 +69,18 @@ def calculate_power_spectrum(data_left,data_right,channel:int, fs:int):
     plot_limit: tuple containing the start and end of Hz range to plot the power spectrum
     
     Returns: tuple of (frequencies, power_spectrum) for left and right hand movements."""
-    trial_start = int(start_fixation * fs)
-    trial_end = int(end_fixation * fs)
+    trial_start,trial_end = time_segment
+    t0 = int(trial_start * fs)  # Convert start time to sample index
+    t1 = int(trial_end * fs)  # Convert end time to sample index
 
-    signal_left = data_left[:, trial_start:trial_end, channel]  # C3 channel
-    signal_right = data_right[:,trial_start:trial_end, channel]  # C4 channel
+    signal_left = data_left[:, t0:t1, channel]  
+    signal_right = data_right[:,t0:t1, channel]  
 
     
-    ff_left, pxx_left = welch(signal_left, fs, nperseg=256,noverlap=128,axis=1)
-    ff_right, pxx_right = welch(signal_right, fs, nperseg=256,noverlap=128,axis=1) #ff4 not needed because its equal to ff3
+    ff_left, psd_left = welch(signal_left, fs, nperseg=256,noverlap=128,axis=1)
+    ff_right, psd_right = welch(signal_right, fs, nperseg=256,noverlap=128,axis=1) #ff4 not needed because its equal to ff3
 
-    return (ff_left,pxx_left), (ff_right,pxx_right)
+    return (ff_left,psd_left), (ff_right,psd_right)
 
 
 def create_spectogram(data1,data2, fs, channel,baseline=1): #TODO: Devide the for time segments and then write the power spectrum for each segment.
@@ -88,13 +89,13 @@ def create_spectogram(data1,data2, fs, channel,baseline=1): #TODO: Devide the fo
     data2 = EEG data imagining right hand
     WARNING:TODO:If we substract we need to convert it to dB first so it will be in log scale.
     
-    returns: tuple of (frequencies, times, spectrogram) for left and right hand movements."""
+    returns: dictionary of (frequencies, times, spectrogram) for left and right hand movements."""
 
     signal_left = data1[:,:, channel]  # Select the specified channel
     signal_right = data2[:,:, channel]  # Select the specified channel
 
-    f, t, Sxx_left = spectrogram(signal_left, fs=fs, nperseg=256,axis=1)  # Calculate the spectrogram for left hand movement
-    f2, t2, Sxx_right = spectrogram(signal_right, fs=fs, nperseg=256,axis=1)  # Calculate the spectrogram for right hand movement
+    f, t, psd_left = spectrogram(signal_left, fs=fs, nperseg=256,axis=1)  # Calculate the spectrogram for left hand movement
+    f2, t2, psd_right = spectrogram(signal_right, fs=fs, nperseg=256,axis=1)  # Calculate the spectrogram for right hand movement
 
     output = {}
     #Sxx_left = 10* np.log10(Sxx_left + 1e-10)  # Convert to dB, add small value to avoid log(0)
@@ -102,27 +103,28 @@ def create_spectogram(data1,data2, fs, channel,baseline=1): #TODO: Devide the fo
 
     #Spectogram for substraction of left and right channels
 
-    Sxx_diff = Sxx_left/Sxx_right # Calculate the difference between left and right spectrograms
+    psd_diff = psd_left/psd_right # Calculate the difference between left and right spectrograms
         
 
     #Spectogram for left and right channels  #TODO: mean over all spectogram.  
 
     baseline_mask = t <= baseline #The assisngment says to use the first second as baseline but we start at 1 seconds
     #Average across time baseline period:
-    baseline_Sxx_left = np.mean(Sxx_left[:,:,baseline_mask])  # Select the first second of the spectrogram
-    baseline_Sxx_right = np.mean(Sxx_right[:,:,baseline_mask])  # Select the first second of the spectrogram\
+    baseline_Sxx_left = np.mean(psd_left[:,:,baseline_mask])  # Select the first second of the spectrogram
+    baseline_Sxx_right = np.mean(psd_right[:,:,baseline_mask])  # Select the first second of the spectrogram\
 
-    output['left'] = (f, t, Sxx_left)
-    output['right'] = (f2, t2, Sxx_right)
-    output['difference'] = (f, t, Sxx_diff)
-    output['baseline_left'] = (f, t, Sxx_left - baseline_Sxx_left)
-    output['baseline_right'] = (f2, t2, Sxx_right - baseline_Sxx_right)
+    output['left'] = (f, t, psd_left)
+    output['right'] = (f2, t2, psd_right)
+    output['difference'] = (f, t, psd_diff)
+    output['baseline_left'] = (f, t, psd_left - baseline_Sxx_left)
+    output['baseline_right'] = (f2, t2, psd_right - baseline_Sxx_right)
+
     return output
 
 
 
 
-def psd_feature(ff,power,f_b):
+def psd_feature(ff,psd,frequancy_band):
     """
     data1: signal of left hand movement (Can be raw signal or PSD or spectogram)
     data2: signal of right hand movement "-"
@@ -138,18 +140,18 @@ def psd_feature(ff,power,f_b):
 
     #TODO: Check if IAF needed. Start without it and if needed add it later.
 
-    mask = (ff >= f_b[0]) & (ff <= f_b[1])  # Mask for the frequency band
+    mask = (ff >= frequancy_band[0]) & (ff <= frequancy_band[1])  # Mask for the frequency band
     
     ff_len = len(ff)  # Length of the frequency vector
     
     #Calculate delta_f for frequency resolution (Right and left hand movement should be the same)
     delta_f_left = ff[1] - ff[0]  # Frequency resolution
-    power_shape1 , power_shape2 = power.shape  # Shape of the power spectrum
+    power_shape1 , power_shape2 = psd.shape  # Shape of the power spectrum
     #Calcualte power: equivalent to the area under the curve in the frequency band
-    power = np.transpose(power) if power_shape1==ff_len else power #Take the right shape for masking can be (trials,frequencies) or (frequencies,time)
+    psd = np.transpose(psd) if power_shape1==ff_len else psd #Take the right shape for masking can be (trials,frequencies) or (frequencies,time)
 
-    power = np.sum(power[:,mask],axis=1) * delta_f_left  # Area under the curve in the frequency band
-    feature_vector_left = np.array([power])
+    psd = np.sum(psd[:,mask],axis=1) * delta_f_left  # Area under the curve in the frequency band
+    feature_vector_left = np.array([psd])
 
     return feature_vector_left
 
@@ -167,14 +169,42 @@ def main():
     psd_left3_tuple, psd_right3_tuple = calculate_power_spectrum(train_left,train_right,channel=0,fs=fs) # C3 channel return (ff3, pxx_left), (ff4, pxx_right)
     psd_left4_tuple, psd_right4_tuple = calculate_power_spectrum(train_left,train_right,channel=1,fs=fs) # C4 channel return (ff3, pxx_left), (ff4, pxx_right)
 
+    # Extract psd information from each hand and each channel
+    #Channel 3
     ff3, pxx_left3 = psd_left3_tuple
-    ff4, pxx_left4 = psd_left4_tuple
     _, pxx_right3 = psd_right3_tuple
+
+    #Channel 4
+    ff4, pxx_left4 = psd_left4_tuple
     _, pxx_right4 = psd_right4_tuple
+
 
     plot_power_spectrum(ff3,pxx_left3,pxx_right3,trial_num=0,channel=0, plot_limit=(0, 30),mean=True)  # C3 channel
     plot_power_spectrum(ff4,pxx_left4,pxx_right4, trial_num=0,channel=1, plot_limit=(0, 30),mean=True)  # C4 channel
 
+        #Channel 3 features 
+    feature_left = psd_feature(ff3,pxx_left3,frequancy_band=(15, 20))
+    print("Feature vector for left hand movement:", feature_left)
+
+    feature_right = psd_feature(ff3,pxx_right3,frequancy_band=(15, 20))
+    print("Feature vector for right hand movement:", feature_right)
+
+    #Channel 4 features
+    feature_left4 = psd_feature(ff4,pxx_left4,(7, 12))
+    print("Feature vector for left hand movement C4 channel:", frequancy_band=feature_left4)
+
+    feature_right4 = psd_feature(ff4,pxx_right4,(7, 12))
+    print("Feature vector for right hand movement C4 channel:", frequancy_band=feature_right4)
+
+    """From Spectogram"""
+    sg3_info = create_spectogram(train_left,train_right, fs, channel=0)  # C3 channel
+    sg4_info = create_spectogram(train_left,train_right, fs, channel=1)  # C4 channel
+
+    data_sg = ['baseline_left'] #data_sg can be a subset of the keys in sg3_info and sg4_info (i.e. 'left', 'right','baseline_left','baseline_right' ,'difference')
+    plot_spectogram(sg3_info, data_sg,channel=3,trial=0 ,mean=True)  # C3 channel
+    #plot_spectogram(sg4_info, data_sg,channel=4,trial=0 ,mean=True)  # C4 channel
+
+    #TODO: Compare the power spectra of both classes. Are there any frequency bands that seem useful for separating the classes?
 
 
 if __name__ == "__main__":
