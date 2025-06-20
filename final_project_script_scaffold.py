@@ -82,7 +82,7 @@ def calculate_power_spectrum(data_left,data_right,channel:int, fs:int):
     return (ff_left,pxx_left), (ff_right,pxx_right)
 
 
-def create_spectogram(data1,data2, fs, channel,baseline=1):
+def create_spectogram(data1,data2, fs, channel,baseline=1): #TODO: Devide the for time segments and then write the power spectrum for each segment.
     """Creates a spectrogram of the EEG data for a specific channel.
     data1 = EEG data of imagining left hand
     data2 = EEG data imagining right hand
@@ -122,36 +122,38 @@ def create_spectogram(data1,data2, fs, channel,baseline=1):
 
 
 
-def psd_feature(ff,power, fs,f_b):
+def psd_feature(ff,power,f_b):
     """
     data1: signal of left hand movement (Can be raw signal or PSD or spectogram)
     data2: signal of right hand movement "-"
-    fs: sampling frequency
     channel: channel index to analyze (0 for C3, 1 for C4)
     frequancy_band1: tuple of (start_freq, end_freq) for the first frequency band in Hz
-    st_fix: start fixation time in seconds
-    en_fix: end fixation time in seconds
+
+    returns: 
+    power band over the frequency band for left/right hand movement.
+    shape is a scalar value for each trial or time. depending on the shape of the power spectrum.
+
+
     """
 
     #TODO: Check if IAF needed. Start without it and if needed add it later.
 
-    left_mask = (ff >= f_b[0]) & (ff <= f_b[1])  # Mask for the frequency band
-
+    mask = (ff >= f_b[0]) & (ff <= f_b[1])  # Mask for the frequency band
+    
+    ff_len = len(ff)  # Length of the frequency vector
     
     #Calculate delta_f for frequency resolution (Right and left hand movement should be the same)
     delta_f_left = ff[1] - ff[0]  # Frequency resolution
-
+    power_shape1 , power_shape2 = power.shape  # Shape of the power spectrum
     #Calcualte power: equivalent to the area under the curve in the frequency band
-    # For left hand movement:
-    power_left = np.sum(power[:,left_mask],axis=1) * delta_f_left  # Area under the curve in the frequency band
-    feature_vector_left = np.array([power_left])
-    # For right hand movement:
+    power = np.transpose(power) if power_shape1==ff_len else power #Take the right shape for masking can be (trials,frequencies) or (frequencies,time)
 
+    power = np.sum(power[:,mask],axis=1) * delta_f_left  # Area under the curve in the frequency band
+    feature_vector_left = np.array([power])
 
     return feature_vector_left
 
-def spectogram_feature(signal, fs, f_b):
-    pass
+
 
 
 
@@ -192,32 +194,33 @@ if __name__ == "__main__":
     #plot_power_spectrum(ff4,pxx_left4,pxx_right4, trial_num=0,channel=1, plot_limit=(0, 30),mean=True)  # C4 channel
 
         #Channel 3 features 
-    """feature_left = psd_feature(ff3,pxx_left3,fs, (15, 20))
+    """feature_left = psd_feature(ff3,pxx_left3,(15, 20))
     print("Feature vector for left hand movement:", feature_left)
 
-    feature_right = psd_feature(ff3,pxx_right3,fs, (15, 20))
+    feature_right = psd_feature(ff3,pxx_right3,(15, 20))
     print("Feature vector for right hand movement:", feature_right)
 
     #Channel 4 features
-    feature_left4 = psd_feature(ff4,pxx_left4,fs, (7, 12))
+    #feature_left4 = psd_feature(ff4,pxx_left4,(7, 12))
     print("Feature vector for left hand movement C4 channel:", feature_left4)
 
-    feature_right4 = psd_feature(ff4,pxx_right4,fs, (7, 12))
+    feature_right4 = psd_feature(ff4,pxx_right4,(7, 12))
     print("Feature vector for right hand movement C4 channel:", feature_right4)"""
 
     """From Spectogram"""
     sg3_info = create_spectogram(train_left,train_right, fs, channel=0)  # C3 channel
     sg4_info = create_spectogram(train_left,train_right, fs, channel=1)  # C4 channel
 
-    data_sg = ['baseline_left','baseline_right','left'] #data_sg can be a subset of the keys in sg3_info and sg4_info (e.i. 'left', 'right','baseline_left','baseline_right' ,'difference')
-    #plot_spectogram(sg3_info, data_sg,channel=3,trial=0 ,mean=True)  # C3 channel
+    data_sg = ['baseline_left','baseline_right','left','right'] #data_sg can be a subset of the keys in sg3_info and sg4_info (e.i. 'left', 'right','baseline_left','baseline_right' ,'difference')
+    plot_spectogram(sg3_info, data_sg,channel=3,trial=0 ,mean=True)  # C3 channel
+    #plot_spectogram(sg4_info, data_sg,channel=4,trial=0 ,mean=True)  # C4 channel
 
     f_bl ,t_bl, Sxx_bl_left = sg3_info['baseline_left']  # Get the baseline left spectrogram
     f_br, t_br, Sxx_br_right = sg3_info['baseline_right']  # Get the baseline right spectrogram
 
-    feature_left_bl = psd_feature(f_bl, Sxx_bl_left, fs, (15, 20))  # Calculate feature vector for left hand movement in baseline
+    feature_left_bl = psd_feature(f_bl, Sxx_bl_left, (15, 20))  # Calculate feature vector for left hand movement in baseline
     print("Feature vector for left hand movement in baseline C3 channel:", feature_left_bl)
-    feature_right_bl = psd_feature(f_br, Sxx_br_right, fs, (15, 20))  # Calculate feature vector for right hand movement in baseline
+    feature_right_bl = psd_feature(f_br, Sxx_br_right,(15, 20))  # Calculate feature vector for right hand movement in baseline
     print("Feature vector for right hand movement in baseline C3 channel:", feature_right_bl)
 
     print("""Length of feature vector for left hand movement in baseline C3 channel: {}""".format(len(feature_left_bl[0]))) #output is power for each time
