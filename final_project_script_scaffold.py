@@ -188,7 +188,7 @@ def time_feature(train_left, train_right,channel):
     feature_names = ['Root Mean squared', 'Variance']  # update if different
 
 
-    for i in range(len(feature_names)):
+    """for i in range(len(feature_names)):
         plt.figure(figsize=(8, 5))
         plt.hist(X_time_feats[y == 0, i], bins=50, alpha=0.6, label='Left', color='blue')
         plt.hist(X_time_feats[y == 1, i], bins=50, alpha=0.6, label='Right', color='red')
@@ -197,7 +197,7 @@ def time_feature(train_left, train_right,channel):
         plt.ylabel('Number of Trials')
         plt.legend()
         plt.tight_layout()
-        plt.show()
+        plt.show()"""
 
     return X_time_feats
 
@@ -247,7 +247,7 @@ def spectral_entropy(ff3, pxx_left3, pxx_right3, ff4, pxx_left4, pxx_right4):
     entropy_C4_right = X_right[:, 1]
 
     # Plot histograms
-    plt.figure(figsize=(12, 5))
+    """plt.figure(figsize=(12, 5))
 
     # Histogram 1: Entropy C3
     plt.subplot(1, 2, 1)
@@ -268,97 +268,75 @@ def spectral_entropy(ff3, pxx_left3, pxx_right3, ff4, pxx_left4, pxx_right4):
     plt.legend()
 
     plt.tight_layout()
-    plt.show()
+    plt.show()"""
     return entropy_left3, entropy_right3, entropy_left4, entropy_right4
 
 def create_feature_vector(time_segment, frequency_bands,train_left, train_right, fs):
-    channel_3 = {}
-    channel_4 = {}
-    total_feature = len(channel_3) * len(frequency_bands) + 1
 
-    for time_segment in time_segment:
+    trial_size = train_left.shape[0]  # Number of trials
+    shape = (len(time_segment), len(frequency_bands), trial_size)
+    ch3_feature_left, ch3_feature_right, ch4_feature_left, ch4_feature_right = [
+        np.empty(shape) for _ in range(4)
+    ]
+
+    ch3_left_entropy, ch3_right_entropy, ch4_left_entropy, ch4_right_entropy = [
+        np.empty((trial_size,len(time_segment))) for _ in range(4)
+    ]  # Initialize entropy arrays
+    
+
+
+    for i,time_segment in enumerate(time_segment):
         """Each output contains the power spectrum for left and right hand movements for each channel.
         as well as the frequency vector.
         {'segment': (ff, psd_left, psd_right)}"""
 
         print(f"Calculating power spectrum for segment: {time_segment}")
-        output_3 = calculate_power_spectrum(train_left,train_right,channel=0,fs=fs,time_segment=time_segment)
-        output_4 = calculate_power_spectrum(train_left,train_right,channel=1,fs=fs,time_segment=time_segment)
-        channel_3[time_segment] = output_3  # Store the output for C3 channel
-        channel_4[time_segment] = output_4
+        ff3, psd_left3, psd_right3 = calculate_power_spectrum(train_left,train_right,channel=0,fs=fs,time_segment=time_segment)
+        ff4, psd_left4, psd_right4 = calculate_power_spectrum(train_left,train_right,channel=1,fs=fs,time_segment=time_segment)
 
-    #For spectral entropy features
-    ff3, psd_left3, psd_right3 = calculate_power_spectrum(train_left,train_right,channel=0,fs=fs,time_segment=(2.15, 6))  # C3 channel
-    ff4, psd_left4, psd_right4 = calculate_power_spectrum(train_left,train_right,channel=1,fs=fs,time_segment=(2.15, 6))  # C4 channel
-    entropy_left3, entropy_right3, entropy_left4, entropy_right4 = spectral_entropy(ff3, psd_left3, psd_right3,ff4, psd_left4, psd_right4)
-   
+        #Calculate spectral entropy for each channel
+        entropy_left3, entropy_right3, entropy_left4, entropy_right4 = spectral_entropy(ff3, psd_left3, psd_right3,ff4, psd_left4, psd_right4)
+        ch3_left_entropy[:,i] = entropy_left3.T  # Store entropy for left hand movement in C3 channel
+        ch3_right_entropy[:,i] = entropy_right3.T  # Store entropy for right hand movement in C3 channel
+        ch4_left_entropy[:,i] = entropy_left4.T  # Store entropy for left hand movement in C4 channel
+        ch4_right_entropy[:,i] = entropy_right4.T  # Store entropy for right hand movement in C4 channel
+
+        for j,band in enumerate(frequency_bands):
+                ch3_pwr_left = psd_feature(ff3, psd_left3, frequency_band=band)
+                ch3_pwr_right = psd_feature(ff3, psd_right3, frequency_band=band)
+                ch4_pwr_left = psd_feature(ff4, psd_left4, frequency_band=band)
+                ch4_pwr_right = psd_feature(ff4, psd_right4, frequency_band=band)
+                #Store the features for each segment and frequency band
+                ch3_feature_left[i,j,:] = ch3_pwr_left
+                ch3_feature_right[i,j,:] = ch3_pwr_right
+                ch4_feature_left[i,j,:] = ch4_pwr_left
+                ch4_feature_right[i,j,:] = ch4_pwr_right
+
+    ch3_feature_left, ch3_feature_right, ch4_feature_left, ch4_feature_right = ch3_feature_left.reshape(-1, trial_size), ch3_feature_right.reshape(-1, trial_size), ch4_feature_left.reshape(-1, trial_size), ch4_feature_right.reshape(-1, trial_size)
+    
+    X_time_left_ch3, X_time_right_ch3 = time_feature(train_left,train_right,channel=0).reshape(2,trial_size,2)  # shape: (n_trials, 2)
+    X_time_left_ch4, X_time_right_ch4 = time_feature(train_left,train_right,channel=1).reshape(2,trial_size,2)  # shape: (n_trials, 2)
+
     
     # Add spectral entropy features to total feature count
 
 
-    
-    print("\nCalculating features for C3 and C4 channels")
-    print("Number of segments:", len(channel_3))
-    print("Number of frequency bands:", len(frequency_bands))
-    print("In total there are", len(channel_3) * len(frequency_bands), "feature vectors to calculate. for each channel.\n")
-    total_feature = len(channel_3) * len(frequency_bands)  # Total number of feature vectors to calculate
-    channel_3_features = {}
-    channel_4_features = {}
-    #Channel 3 features
-    ch3_feature_list_left = []
-    ch3_feature_list_right = []
-    
-    
-    trials_size = psd_left3.shape[0]
-    X_time_left_ch3, X_time_right_ch3 = time_feature(train_left,train_right,channel=0).reshape(2,trials_size,2)  # shape: (n_trials, 2)
-    X_time_left_ch4, X_time_right_ch4 = time_feature(train_left,train_right,channel=1).reshape(2,trials_size,2)  # shape: (n_trials, 2)
-    total_feature += X_time_left_ch3.shape[1]  # Add time features to total feature count
-    
-    for seg, (ff3, psd_left3, psd_right3) in channel_3.items():
-        ff, psd_left, psd_right = (ff3, psd_left3, psd_right3)
-        # Calculate features for each frequency band
-        for band in frequency_bands:
-            feature_left = psd_feature(ff, psd_left, frequency_band=band)
-            feature_right = psd_feature(ff, psd_right, frequency_band=band)
-            ch3_feature_list_left.append(feature_left[0])
-            ch3_feature_list_right.append(feature_right[0])
-
-    channel_3_features['left'] = ch3_feature_list_left
-    channel_3_features['right'] = ch3_feature_list_right
-
-    #Channel 4 features
-    ch4_feature_list_left = []
-    ch4_feature_list_right = []
-    for seg, (ff4, psd_left4, psd_right4) in channel_4.items():
-        ff, psd_left, psd_right = (ff4, psd_left4, psd_right4)
-
-        # Calculate features for each frequency band
-        for band in frequency_bands:
-            feature_left = psd_feature(ff, psd_left, frequency_band=band)
-            feature_right = psd_feature(ff, psd_right, frequency_band=band)
-            ch4_feature_list_left.append(feature_left[0])
-            ch4_feature_list_right.append(feature_right[0])
-
-    channel_4_features['left'] = ch4_feature_list_left
-    channel_4_features['right'] = ch4_feature_list_right
-
-    assert len(ch3_feature_list_left) == len(ch3_feature_list_right), "Left and right feature lists must have the same length."
-    assert len(ch4_feature_list_left) == len(ch4_feature_list_right), "Left and right feature lists must have the same length."
-    print("Length of feature vectors for C3 channel for each hand:", len(ch3_feature_list_left))
-    print("Length of feature vectors for C4 channel for each hand:", len(ch4_feature_list_right))
     print("\nFeature vectors calculated successfully.\n")
 
     #Concertante everything: 
-    channel_3_left = np.concatenate([np.array(ch3_feature_list_left).T, X_time_left_ch3,np.array([entropy_left3]).T], axis=1)  # shape: (n_trials, n_features_total)
-    channel_3_right = np.concatenate([np.array(ch3_feature_list_right).T, X_time_right_ch3,np.array([entropy_right3]).T], axis=1)
-    channel_4_left = np.concatenate([np.array(ch4_feature_list_left).T, X_time_left_ch4,np.array([entropy_left4]).T], axis=1)  # shape: (n_trials, n_features_total)
-    channel_4_right = np.concatenate([np.array(ch4_feature_list_right).T, X_time_right_ch4,np.array([entropy_right4]).T], axis=1)
+    channel_3_left = np.concatenate([ch3_feature_left.T, X_time_left_ch3,ch3_left_entropy], axis=1)  # shape: (n_trials, n_features_total)
+    channel_3_right = np.concatenate([ch3_feature_right.T, X_time_right_ch3,ch3_right_entropy], axis=1)
+    channel_4_left = np.concatenate([ch4_feature_left.T, X_time_left_ch4,ch4_left_entropy], axis=1)  # shape: (n_trials, n_features_total)
+    channel_4_right = np.concatenate([ch4_feature_right.T, X_time_right_ch4,ch4_right_entropy], axis=1)
 
-    left = np.vstack([channel_3_left,channel_4_left]) #(n_trials_left_ch3 + n_trials_right_ch4, n_features_total)
-    right = np.vstack([channel_3_right,channel_4_right]) #(n_trials_left_ch3 + n_trials_right_ch4, n_features_total)
+    left_features = np.vstack([channel_3_left,channel_4_left]) #(n_trials_left_ch3 + n_trials_right_ch4, n_features_total)
+    right_features = np.vstack([channel_3_right,channel_4_right]) #(n_trials_left_ch3 + n_trials_right_ch4, n_features_total)
 
+    assert left.shape == right.shape, "Left and right feature vectors must have the same shape."
+    print("Feature vectors for C3 and C4 channels created successfully.")
+    print("In total there are", left.shape[-1], "feature vectors to calculate. for each channel.\n")
 
-    return  left, right  # Return the feature vectors for C3 and C4 channels for left and right hand movements
+    return  left_features, right_features  # Return the feature vectors for C3 and C4 channels for left and right hand movements
 
 def calculate_PCA(features_left, features_right, n_components=3):
     """
@@ -441,8 +419,10 @@ def main():
 if __name__ == "__main__":
     #main()
     #Power Spectrum divided into time segments (1.5 seconds)
-    segment = [(1.0, 2.0),(2.0,3.0) ,(4.0, 5.0), (5, 6)]  # Define time segments for analysis
-    frequency_bands = [(6,12),(12,15), (15,20),(20,25) ,(25,30)]  # Define frequency bands for analysis
+    #segment = [(1.5, 2.0),(2.0,2.5),(2.5,3.0),(3.0, 3.5),(3.5, 4),(4,4.5),(4.5,5),(5,5.5),(5.5,6)]  # Define time segments for analysis
+    #segment = [(2.15, 3.15),(3.15,4.15),(4.15,5.15),(5.15,6)]  # Define time segments for analysis
+    segment = [(1,3),(3,5),(5,6)]  # Define time segments for analysis
+    frequency_bands = [(6,12),(12,20), (20,25)]  # Define frequency bands for analysis
 
     left_features, right_feature = create_feature_vector(segment, frequency_bands, train_left, train_right, fs)
 
@@ -452,15 +432,17 @@ if __name__ == "__main__":
         plot_PCA(X_pca, y)
     
     X = np.concatenate((left_features, right_feature),axis=0) # shape: (n_trials_total, n_features_total)            
-    y = np.array([0]*len(left_features) + [1]*len(right_feature))  # 0 = LEFT, 1 = RIGHT
+    #y = np.array([0]*len(left_features) + [1]*len(right_feature))  # 0 = LEFT, 1 = RIGHT
     
     #Split into train and validation but generate random state
-    rnd_state = random.randint(0, 10000)
-    
-    X_train_val, X_test, y_train_val, y_test = train_test_split(
-        X_pca, y, test_size=0.2, stratify=y, random_state=rnd_state
-    )
+    for j in range(1000):
+        rnd_state = random.randint(0, 10000)
+        print(f"Iteration {j+1}:")
+        print(f"Random state for train-test split: {rnd_state}")
+        X_train_val, X_test, y_train_val, y_test = train_test_split(
+            X_pca, y, test_size=0.1, stratify=y, random_state=rnd_state
+        )
 
-    lda, scaler = cross_validate_LDA(X_train_val, y_train_val, k=10)
+        lda, scaler = cross_validate_LDA(X_train_val, y_train_val, k=10)
 
-    test_acc = train_and_test_on_holdout(X_train_val, y_train_val, X_test, y_test, scaler, lda)
+        test_acc = train_and_test_on_holdout(X_train_val, y_train_val, X_test, y_test, scaler, lda)
