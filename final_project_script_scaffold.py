@@ -26,10 +26,13 @@ def main():
     power_spectra(train_dataset)
 
     # PART 3:
-    X_pca, y = features(train_dataset)
+    left_features, right_features, X_pca, y_pca = features(train_dataset)
+
+    X = np.concatenate((left_features, right_features), axis=0)
+    y = np.array([0]*len(left_features) + [1]*len(right_features))  # 0 = LEFT, 1 = RIGHT
 
     # PART 4:
-    classification(X_pca, y)
+    classification(X_pca, y_pca, X, y)
 
 
 if __name__ == "__main__":
