@@ -147,7 +147,7 @@ def create_features_matrix(dataset):
 def calculate_PCA(features_left, features_right, n_components=3):
     """Applies PCA to combined features from both classes and returns transformed features and labels."""
     X = np.concatenate((features_left, features_right), axis=0)  # shape: (n_trials_total, n_features_total)
-    y = np.array([0]*len(features_left) + [1]*len(features_right))  # 0 = LEFT, 1 = RIGHT
+    y_pca = np.array([0]*len(features_left) + [1]*len(features_right))  # 0 = LEFT, 1 = RIGHT
 
     # Normalize features (mean=0, std=1)
     scaler = StandardScaler()
@@ -157,7 +157,7 @@ def calculate_PCA(features_left, features_right, n_components=3):
     pca = PCA(n_components=n_components)
     X_pca = pca.fit_transform(X_scaled)
 
-    return X_pca, y, pca
+    return X_pca, y_pca, pca
 
 
 def plot_PCA(X_pca, y):
