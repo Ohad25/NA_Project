@@ -39,7 +39,7 @@ class MotorImageryDataset:
             self.c4_right = self.data_right[:, :, 1]
 
             self.c3_data = self.data[:, :, 0]
-            self.c3_data = self.data[:, :, 1]
+            self.c4_data = self.data[:, :, 1]
 
     def get_all(self) \
             -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
