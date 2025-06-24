@@ -13,31 +13,6 @@ from sklearn.preprocessing import StandardScaler
 
 
 
-def cross_validate_LDA(X_train_val, y_train_val, k=10):
-    """Performs k-fold cross-validation using LDA on the training data and returns the model and scaler."""
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X_train_val)
-
-    lda = LinearDiscriminantAnalysis()
-    kf = KFold(n_splits=k, shuffle=True, random_state=42)
-
-    scores = cross_val_score(lda, X_scaled, y_train_val, cv=kf)
-
-    print(f"{k}-Fold CV Accuracy on training set: {np.mean(scores)*100:.2f} ± {np.std(scores)*100:.2f}%")
-
-    return lda, scaler
-
-
-def train_and_test_on_holdout(X_train_val, y_train_val, X_test, y_test, lda):
-    """Trains LDA on the full training data and evaluates accuracy on a held-out test set."""
-    lda.fit(X_train_val, y_train_val)
-
-    y_test_prediction = lda.predict(X_test)
-    test_acc = accuracy_score(y_test, y_test_prediction)
-
-    print(f"Test Accuracy on held-out set: {test_acc * 100:.2f}%")
-    return test_acc
-
 
 def cv_score(clf, X, y, n_splits=10, seed=42):
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
@@ -90,19 +65,6 @@ def anova_sweep(X, y, max_feats=None):
     return np.arange(1, len(means) + 1), np.array(means), np.array(sds)
 
 
-def train_classifier(X_pca, y):
-    """Performs repeated train-test splits and runs LDA classification with cross-validation and test evaluation."""
-    for j in range(1000):
-        rnd_state = random.randint(0, 10000)
-        print(f"Iteration {j + 1}:")
-        print(f"Random state for train-test split: {rnd_state}")
-        X_train_val, X_test, y_train_val, y_test = train_test_split(
-            X_pca, y, test_size=0.1, stratify=y, random_state=rnd_state
-        )
-
-    lda, scaler = cross_validate_LDA(X_train_val, y_train_val, k=10)
-
-    return train_and_test_on_holdout(X_train_val, y_train_val, X_test, y_test, lda)
 
 
 def improve_accuracy(X_raw, y):
@@ -123,8 +85,6 @@ def improve_accuracy(X_raw, y):
 
 
 def classification(X_pca, y_pca, X, y):
-    train_classifier(X_pca, y_pca)
-
     try_parameters(X, y)
     # improve_accuracy(X, y)
 
@@ -133,6 +93,8 @@ def evaluate_pipeline(X, y, reducer, k):
     """
     Build pipeline with LDA and given reducer (PCA, ANOVA, RFE)
     """
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
     if reducer == 'pca':
         reducer_step = PCA(n_components=k, random_state=0)
     elif reducer == 'anova':
@@ -149,7 +111,19 @@ def evaluate_pipeline(X, y, reducer, k):
         ('reduce', reducer_step),
         ('lda', LinearDiscriminantAnalysis())
     ])
+    """if reducer == 'pca':
+        reducer_step = PCA(n_components=k, random_state=0)
+        reduced = reducer_step.fit_transform(X_scaled)
+    elif reducer == 'anova':
+        reducer_step = SelectKBest(score_func=f_classif, k=k)
+    elif reducer == 'rfe':
+        # RFE needs a model with coef_ or feature_importances_
+        selector_model = LogisticRegression(max_iter=1000, solver='liblinear')
+        reducer_step = RFE(estimator=selector_model, n_features_to_select=k, step=1)
+    else:
+        raise ValueError("Reducer must be 'pca', 'anova' or 'rfe'")
 
+    lda = LinearDiscriminantAnalysis()"""
     cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
     scores = cross_val_score(pipe, X, y, cv=cv)
     return scores.mean(), scores.std()
