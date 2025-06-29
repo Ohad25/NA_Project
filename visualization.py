@@ -15,11 +15,11 @@ def plot_EEG(data, fs, title, channels_idx, side):
         ax.plot(np.arange(data.shape[1]) / fs, data[random_index, :, c4_idx], label='C4', color='red')
         ax.set_title(f'Trial {random_index}')
         ax.set_xlabel('Time (s)')
-        ax.set_ylabel('Amplitude')
+        ax.set_ylabel('Voltage (µV)')
         ax.grid(True)
         ax.legend()
 
-    plt.suptitle(f'EEG Data from {title} - {side} Side - Channels C3 & C4', fontsize=16)
+    plt.suptitle(f'EEG Data from {title} - {side} - Channels C3 & C4', fontsize=16)
     plt.tight_layout(rect=(0, 0.03, 1, 0.95))
     plt.show()
 
@@ -28,8 +28,7 @@ def visualization(dataset):
     """Displays raw EEG waveforms from both left and right motor imagery trials."""
     title = 'Training Data'
 
-    plot_EEG(dataset.data_left, dataset.fs, title, dataset.channel_names.keys(), side='Left')
-    plot_EEG(dataset.data_right, dataset.fs, title, dataset.channel_names.keys(), side='Right')
+    plot_EEG(dataset.data_left, dataset.fs, title, dataset.channel_names.keys(), side='Left Hand')
+    plot_EEG(dataset.data_right, dataset.fs, title, dataset.channel_names.keys(), side='Right Hand')
 
-    plot_EEG(dataset.data_left, dataset.fs, title, dataset.channel_names.keys(), side='Left')
-    plot_EEG(dataset.data_left, dataset.fs, title, dataset.channel_names.keys(), side='Right')
+
