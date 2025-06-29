@@ -1,6 +1,47 @@
 from scipy.signal import spectrogram
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.signal import welch
+
+
+
+
+def calculate_power_spectrum(dataset,time_segment:tuple):
+    """Computes the Welch power spectrum for left and right trials of a given EEG channel and time segment."""
+    t0, t1 = time_segment
+    windowed = dataset.get_windowed_data(t0, t1)
+
+    c3 = windowed[f'C3']
+    c4 = windowed[f'C4']
+    n_per_segment = c3.shape[1] // 2
+
+    f, psd_c3 = welch(c3, dataset.fs, nperseg=n_per_segment, axis=1)
+    _, psd_c4 = welch(c4, dataset.fs, nperseg=n_per_segment, axis=1)
+
+    return f, psd_c3, psd_c4
+
+def plot_power_spectrum(ff_left, pxx_left,pxx_right,trial_num:int,channel ,plot_limit:tuple,mean=True ):
+     
+    start_freq = plot_limit[0]
+    end_freq = plot_limit[1]
+    mask = (ff_left >= start_freq) & (ff_left <= end_freq) #Take only the frequencies in the specified range
+    ff3_masked = ff_left[mask]
+
+
+    if mean:
+        pxx_left = np.mean(pxx_left, axis=0)  # Average across trials
+        pxx_right = np.mean(pxx_right, axis=0)  # Average across trials
+        pxx_left = pxx_left[mask]
+        pxx_right = pxx_right[mask]
+    
+        std_pxx_left = np.std(pxx_left, axis=0)
+        std_pxx_right = np.std(pxx_right, axis=0)
+
+    else:
+        pxx_left = pxx_left[trial_num,mask]
+        pxx_right = pxx_right[trial_num,mask]
+    # Plotting the power spectrum for C3 and C4 channels
+
 
 
 def create_spectrogram(left_data, right_data, fs, baseline):
@@ -9,7 +50,7 @@ def create_spectrogram(left_data, right_data, fs, baseline):
     f, t, psd_left = spectrogram(left_data, fs=fs, nperseg=256, axis=1)
     f2, t2, psd_right = spectrogram(right_data, fs=fs, nperseg=256, axis=1)
 
-    psd_diff = psd_left / psd_right  # Avoid division by zero
+    psd_diff = psd_left - psd_right  # Avoid division by zero
 
     baseline_mask = t <= baseline  # The assignment says to use the first second as baseline, but we start at 1 seconds
     # Average across time baseline period:
@@ -60,6 +101,8 @@ def power_spectra(dataset):
     baseline = 1  # First second as baseline
     sg3_info = create_spectrogram(dataset.c3_left, dataset.c3_right, dataset.fs, baseline)
     sg4_info = create_spectrogram(dataset.c4_left, dataset.c4_right, dataset.fs, baseline)
+
+    
 
     data_sg = ['left', 'right', 'baseline_left', 'baseline_right', 'difference']
     plot_spectrogram(sg3_info, data_sg, channel=3, trial=0, mean=True)
