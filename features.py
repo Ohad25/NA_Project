@@ -3,29 +3,11 @@ import numpy as np
 from scipy.signal import welch
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-
+from power_spectra import calculate_power_spectrum
 # Constants
-start_fixation = 2.15
-end_fixation = 6.0
-time_segments = [(1, 3), (3, 5), (5, 6)]
-frequency_bands = [(6, 12), (12, 20), (20, 25)]
 
-
-def calculate_power_spectrum(dataset, channel_idx: int, time_segment=(start_fixation, end_fixation)):
-    """Computes the Welch power spectrum for left and right trials of a given EEG channel and time segment."""
-    t0, t1 = time_segment
-    windowed = dataset.get_windowed_data(t0, t1)
-    channel = dataset.channel_names[channel_idx]
-
-    left = windowed[f'{channel}-Left']
-    right = windowed[f'{channel}-Right']
-    n_per_segment = left.shape[1] // 2
-
-    f, psd_left = welch(left, dataset.fs, nperseg=n_per_segment, axis=1)
-    _, psd_right = welch(right, dataset.fs, nperseg=n_per_segment, axis=1)
-
-    return f, psd_left, psd_right
-
+time_segments = [(1, 3),(1,2.5) ,(3, 5), (5, 6)]
+frequency_bands = [(6, 12), (12, 16),(16,20), (20, 25)]
 
 def psd_feature(frequencies, psd, frequency_band):
     """Calculates band power from a PSD array within a specified frequency range."""
@@ -39,44 +21,43 @@ def psd_feature(frequencies, psd, frequency_band):
     return np.sum(psd[:, mask], axis=1) * delta_f  # shape: (n_trials,)
 
 
-def compute_band_features(dataset, channel_idx: int):
+def compute_band_features(dataset):
     """Extracts band power features across time segments and frequency bands for a given channel."""
-    feats_left, feats_right = [], []
+    feats_c3, feats_c4 = [], []
 
     for seg in time_segments:
-        frequencies, psd_left, psd_right = calculate_power_spectrum(dataset, channel_idx, time_segment=seg)
+        frequencies, psd_c3, psd_c4 = calculate_power_spectrum(dataset,time_segment=seg)
         for band in frequency_bands:
-            feats_left.append(psd_feature(frequencies, psd_left, band))
-            feats_right.append(psd_feature(frequencies, psd_right, band))
+            feats_c3.append(psd_feature(frequencies, psd_c3, band))
+            feats_c4.append(psd_feature(frequencies, psd_c4, band))
 
-    return np.array(feats_left).T, np.array(feats_right).T  # (n_trials, n_features)
+    return np.array(feats_c3).T, np.array(feats_c4).T  # (n_trials, time_segments * frequency_bands)
 
 
 def extract_time_features(trials):
     """Computes RMS and variance features for each EEG trial."""
-    feats = []
+    feats_loop = []
+    rms = np.sqrt(np.mean(trials**2, axis=1))  # RMS for each trial
+    var = np.var(trials, axis=1)  # Variance for each trial
+    feats = np.column_stack((rms, var))  # shape: (n_trials, 2)
     for trial in trials:
-        rms = np.sqrt(np.mean(trial**2, axis=0))
-        var = np.var(trial, axis=0)
-        feats.append(np.array([rms, var]))
+        rms_forloop = np.sqrt(np.mean(trial**2, axis=0))
+        var_forloop = np.var(trial, axis=0)
+        feats_loop.append(np.array([rms_forloop, var_forloop]))
+    assert np.all(np.isclose(feats,np.array(feats_loop))), "Mismatch between vectorized and for-loop features"
     return np.array(feats)  # (n_trials, 4)
 
 
-def compute_time_features(dataset, channel_idx: int):
+def compute_time_features(dataset):
     """Extracts RMS and variance features for left and right trials of a specific EEG channel."""
-    if channel_idx == 0:
-        left_trials = dataset.c3_left
-        right_trials = dataset.c3_right
-    elif channel_idx == 1:
-        left_trials = dataset.c4_left
-        right_trials = dataset.c4_right
-    else:
-        raise ValueError("channel_idx must be 0 (C3) or 1 (C4)")
 
-    left_feats = extract_time_features(left_trials)
-    right_feats = extract_time_features(right_trials)
+    c3_trials = dataset.c3_data
+    c4_trials = dataset.c4_data
 
-    return left_feats, right_feats
+    c3_feats = extract_time_features(c3_trials)
+    c4_feats = extract_time_features(c4_trials)
+
+    return c3_feats, c4_feats
 
 
 def spectral_entropy_from_psd(psd_trials):
@@ -91,63 +72,55 @@ def spectral_entropy_from_psd(psd_trials):
 
 def compute_entropy_features(dataset):
     """Computes spectral entropy features from both EEG channels for left and right trials."""
-    ff3, pxx_left3, pxx_right3 = calculate_power_spectrum(dataset, 0)
-    ff4, pxx_left4, pxx_right4 = calculate_power_spectrum(dataset, 1)
+    ch3_entropy = np.empty((len(dataset.c3_data), len(time_segments)))
+    ch4_entropy = np.empty((len(dataset.c4_data), len(time_segments)))
+    
+    for i,seg in enumerate(time_segments):
+        ff3, pxx_c3, pxx_c4 = calculate_power_spectrum(dataset,time_segment=seg)
 
-    entropy_left3 = spectral_entropy_from_psd(pxx_left3)
-    entropy_right3 = spectral_entropy_from_psd(pxx_right3)
+        entropy_ch3 = spectral_entropy_from_psd(pxx_c3)
+        entropy_ch4 = spectral_entropy_from_psd(pxx_c4)
 
-    entropy_left4 = spectral_entropy_from_psd(pxx_left4)
-    entropy_right4 = spectral_entropy_from_psd(pxx_right4)
+        entropy_left4 = spectral_entropy_from_psd(entropy_ch3)
+        entropy_right4 = spectral_entropy_from_psd(entropy_ch4)
+        ch3_entropy[:, i] = entropy_left4
+        ch4_entropy[:, i] = entropy_right4
 
-    left_entropy = np.column_stack((entropy_left3, entropy_left4))  # (n_trials, 2)
-    right_entropy = np.column_stack((entropy_right3, entropy_right4))
+    return ch3_entropy, ch4_entropy
 
-    return left_entropy, right_entropy
-
-
-def build_feature_matrix(band_feats, time_feats, entropy_feats):
-    """Combines band power, time-domain, and entropy features into a single feature matrix."""
-    left = np.concatenate([band_feats[0], time_feats[0], entropy_feats[0]], axis=1)
-    right = np.concatenate([band_feats[1], time_feats[1], entropy_feats[1]], axis=1)
-    return left, right
 
 
 def create_features_matrix(dataset):
     """Extracts and concatenates all EEG features from the dataset for both classes."""
-    all_band_feats = []
-    all_time_feats = []
 
-    for channel_idx in dataset.channel_names.keys():
-        print(f"Extracting features from channel {dataset.channel_names[channel_idx]}...")
-        band_feats = compute_band_features(dataset, channel_idx)
-        time_feats = compute_time_features(dataset, channel_idx)
+    c3_band_feats,c4_band_feats = compute_band_features(dataset)
+    c3_time_feats,c4_time_feats = compute_time_features(dataset)
+    c3_entropy_feats, c4_entropy_feats = compute_entropy_features(dataset)
 
-        all_band_feats.append(band_feats)
-        all_time_feats.append(time_feats)
+    c3_feats = np.concatenate((c3_band_feats, c3_time_feats, c3_entropy_feats), axis=1)
+    c4_feats = np.concatenate((c4_band_feats, c4_time_feats, c4_entropy_feats), axis=1)
 
-    entropy_feats = compute_entropy_features(dataset)
-
-    # Concatenate band + time features across channels
-    band_feats_left = np.concatenate([f[0] for f in all_band_feats], axis=1)
-    band_feats_right = np.concatenate([f[1] for f in all_band_feats], axis=1)
-
-    time_feats_left = np.concatenate([f[0] for f in all_time_feats], axis=1)
-    time_feats_right = np.concatenate([f[1] for f in all_time_feats], axis=1)
-
-    left, right = build_feature_matrix((band_feats_left, band_feats_right),
-                                       (time_feats_left, time_feats_right),
-                                       entropy_feats)
-
-    print("Final feature shapes:")
-    print("Left:", left.shape, "Right:", right.shape)
-    return left, right
+    if dataset.train_mode:
+        c3_left_feats = c3_feats[dataset.left_indices]
+        c3_right_feats = c3_feats[dataset.right_indices]
+        c4_left_feats = c4_feats[dataset.left_indices]
+        c4_right_feats = c4_feats[dataset.right_indices]
+        left = np.concatenate((c3_left_feats, c4_left_feats), axis=1)
+        right = np.concatenate((c3_right_feats, c4_right_feats), axis=1)
+        print("Left:", left.shape, "Right:", right.shape)
+        feats = (left,right)
+    
+        
+    else:
+        feats = (c3_feats, c4_feats)
+    
+    return feats
 
 
 def calculate_PCA(features_left, features_right, n_components=3):
     """Applies PCA to combined features from both classes and returns transformed features and labels."""
     X = np.concatenate((features_left, features_right), axis=0)  # shape: (n_trials_total, n_features_total)
-    y_pca = np.array([0]*len(features_left) + [1]*len(features_right))  # 0 = LEFT, 1 = RIGHT
+    y = np.array([0]*len(features_left) + [1]*len(features_right))  # 0 = LEFT, 1 = RIGHT
 
     # Normalize features (mean=0, std=1)
     scaler = StandardScaler()
@@ -157,7 +130,7 @@ def calculate_PCA(features_left, features_right, n_components=3):
     pca = PCA(n_components=n_components)
     X_pca = pca.fit_transform(X_scaled)
 
-    return X_pca, y_pca, pca
+    return X_pca, y, pca
 
 
 def plot_PCA(X_pca, y):
@@ -204,11 +177,18 @@ def plot_PCA(X_pca, y):
 
 def features(dataset):
     """Runs the full feature extraction pipeline and returns raw and PCA-reduced features with labels."""
-    left_features, right_features = create_features_matrix(dataset)
+    features = create_features_matrix(dataset)
+   
+    if dataset.train_mode:
+        left_features, right_features, = features
 
-    n_components = 10
-    X_pca, y, pca = calculate_PCA(left_features, right_features, n_components=n_components)
-    if n_components < 4:
-        plot_PCA(X_pca, y)
+        
+        X_pca_2d, y_2d, pca_2d = calculate_PCA(left_features, right_features, n_components=2)
+        X_pca_3d, y_3d, pca_3d = calculate_PCA(left_features, right_features, n_components=2)
 
-    return left_features, right_features, X_pca, y
+        plot_PCA(X_pca_2d, y_2d)
+        plot_PCA(X_pca_3d, y_3d)
+
+
+
+    return features
