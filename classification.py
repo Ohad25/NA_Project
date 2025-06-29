@@ -10,6 +10,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import cross_val_score, StratifiedKFold, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.utils import shuffle
 
 
 def cross_validate_LDA(X_train_val, y_train_val, k=10):
@@ -18,7 +19,7 @@ def cross_validate_LDA(X_train_val, y_train_val, k=10):
     X_scaled = scaler.fit_transform(X_train_val)
 
     lda = LinearDiscriminantAnalysis()
-    cv = StratifiedKFold(n_splits=k, shuffle=True, random_state=42)
+    cv = StratifiedKFold(n_splits=k, shuffle=False)
     scores = cross_val_score(lda, X_scaled, y_train_val, cv=cv)
 
     print(f"{k}-Fold CV Accuracy on training set: {np.mean(scores)*100:.2f} ± {np.std(scores)*100:.2f}%")
@@ -38,11 +39,11 @@ def train_and_test_on_holdout(X_test, y_test, lda, scaler):
 
 def try_parameters(X, y):
     """Run a parameter sweep with PCA, ANOVA, and RFE to evaluate LDA performance."""
-    results = feature_reduction_search(X, y, max_k=10)
+    results,best_method = feature_reduction_search(X, y, max_k=40)
     results_df = pd.DataFrame(results)
 
     plot_parameter_search(results_df)
-    return results_df
+    return best_method
 
 
 def feature_reduction_search(X, y, max_k=40):
@@ -64,11 +65,17 @@ def feature_reduction_search(X, y, max_k=40):
             except Exception as e:
                 print(f"Skipped {method} with k={k}: {e}")
 
-    best_result = sorted(results, key=lambda x: x['accuracy'], reverse=True)[0]
+    best_results = sorted(results, key=lambda x: x['accuracy'], reverse=True)
+    best_acc_result = best_results[0]  # Highest accuracy
+    best = [r for r in best_results if np.isclose(r['accuracy'],best_acc_result['accuracy'],atol=1e-2,rtol=0)]
+    best = sorted(best, key=lambda x: x['std'])[0] #Find the highest accuracy with lowest std
+
     print(f"\nBest result:")
-    print(f"Method: {best_result['method']}, Features: {best_result['features']}")
-    print(f"Accuracy: {best_result['accuracy'] * 100:.2f}% ± {best_result['std'] * 100:.2f}%")
-    return results
+    print(f"For accuracy the best Method: {best_acc_result['method']}, Features: {best_acc_result['features']}")
+    print(f"For std the best Method: {best['method']}, Features: {best['features']}")
+    print(f"K-fold mean Accuracy: {best_acc_result['accuracy'] * 100:.2f}% ± {best_acc_result['std'] * 100:.2f}%")
+    print(f"Maximum accuracy with Minimum std method: {best['accuracy'] * 100:.2f}% ± {best['std'] * 100:.2f}% \n for {best['method']} with {best['features']} features")
+    return results, best
 
 
 def evaluate_pipeline(X, y, reducer, k):
@@ -84,13 +91,20 @@ def evaluate_pipeline(X, y, reducer, k):
     else:
         raise ValueError("Reducer must be 'pca', 'anova' or 'rfe'")
 
-    pipe = Pipeline([
-        ('scale', StandardScaler()),
+    if reducer == 'anova':
+        pipe = Pipeline([
         ('reduce', reducer_step),
         ('lda', LinearDiscriminantAnalysis())
     ])
+    
+    else:
+        pipe = Pipeline([
+            ('scale', StandardScaler()),
+            ('reduce', reducer_step),
+            ('lda', LinearDiscriminantAnalysis())
+        ])
 
-    cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+    cv = StratifiedKFold(n_splits=10, shuffle=False)
     scores = cross_val_score(pipe, X, y, cv=cv)
     return scores.mean(), scores.std()
 
@@ -113,18 +127,16 @@ def plot_parameter_search(results_df):
     plt.show()
 
 
-def classification(X_pca, y_pca, X=None, y=None):
+def classification(X, y):
     """Runs LDA classification on preprocessed data and performs parameter search and visualization
     if original raw features are provided."""
-    rnd_state = random.randint(0, 10000)
-    print(f"\nUsing random state: {rnd_state} for train-test split")
 
-    X_train_val, X_test, y_train_val, y_test = train_test_split(
-        X_pca, y_pca, test_size=0.1, stratify=y_pca, random_state=rnd_state
-    )
+    # Cross validation over the whole dataset
+    lda, scaler = cross_validate_LDA(X, y, k=10)
 
-    lda, scaler = cross_validate_LDA(X_train_val, y_train_val, k=10)
-    train_and_test_on_holdout(X_test, y_test, lda, scaler)
+    # Search for best feature reduction method and parameters
+    best_method = try_parameters(X, y)
+    print("\nParameter search results:")
+    print(f"The prediction for the test dataset are:\n {best_method}")
+    return best_method
 
-    if X is not None and y is not None:
-        try_parameters(X, y)
