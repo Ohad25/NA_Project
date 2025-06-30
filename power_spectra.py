@@ -20,28 +20,66 @@ def calculate_power_spectrum(dataset,time_segment:tuple):
 
     return f, psd_c3, psd_c4
 
-def plot_power_spectrum(ff_left, pxx_left,pxx_right,trial_num:int,channel ,plot_limit:tuple,mean=True ):
-     
-    start_freq = plot_limit[0]
-    end_freq = plot_limit[1]
-    mask = (ff_left >= start_freq) & (ff_left <= end_freq) #Take only the frequencies in the specified range
-    ff3_masked = ff_left[mask]
-
-
-    if mean:
-        pxx_left = np.mean(pxx_left, axis=0)  # Average across trials
-        pxx_right = np.mean(pxx_right, axis=0)  # Average across trials
-        pxx_left = pxx_left[mask]
-        pxx_right = pxx_right[mask]
+def plot_power_spectrum(dataset,f, psd_c3,psd_c4,plot_limit:tuple=None):
     
-        std_pxx_left = np.std(pxx_left, axis=0)
-        std_pxx_right = np.std(pxx_right, axis=0)
+    left_indices = dataset.left_indices
+    right_indices = dataset.right_indices
+    psd_c3_left = psd_c3[left_indices]
+    psd_c3_right = psd_c3[right_indices]
 
+    psd_c4_left = psd_c4[left_indices]
+    psd_c4_right = psd_c4[right_indices]
+
+    if plot_limit is not None:
+        start_freq = plot_limit[0]
+        end_freq = plot_limit[1]
     else:
-        pxx_left = pxx_left[trial_num,mask]
-        pxx_right = pxx_right[trial_num,mask]
-    # Plotting the power spectrum for C3 and C4 channels
+        start_freq = f[0]
+        end_freq = f[-1]
+    mask = (f >= start_freq) & (f <= end_freq) #Take only the frequencies in the specified range
+    f_masked = f[mask]
 
+
+    psd_c3_left = np.mean(psd_c3_left,axis=0)[mask]  # Average across trials
+    psd_c3_right = np.mean(psd_c3_right,axis=0)[mask]  # Average across trials
+    psd_c4_left = np.mean(psd_c4_left,axis=0)[mask]  # Average across trials
+    psd_c4_right = np.mean(psd_c4_right,axis=0)[mask]  # Average across trials
+
+
+    std_c3_left = np.std(psd_c3_left, axis=0)
+    std_c3_right = np.std(psd_c3_left, axis=0)
+    std_c4_left = np.std(psd_c4_left, axis=0)
+    std_c4_right = np.std(psd_c4_right, axis=0)
+
+
+    # Plotting the power spectrum for C3 and C4 channels
+    fig, axes = plt.subplots(2, 1, figsize=(15, 10))
+    ax_c3 = axes[0]
+    ax_c4 = axes[1]
+
+    #Subplot for C3
+    ax_c3.plot(f_masked,psd_c3_left, label='Left Hand', color='blue')
+    ax_c3.plot(f_masked, psd_c3_right, label='Right Hand', color='orange')
+    ax_c3.fill_between(f_masked, psd_c3_left - std_c3_left,psd_c3_left + std_c3_left, alpha=0.3)
+    ax_c3.fill_between(f_masked, psd_c3_right - std_c3_right,psd_c3_right + std_c3_right, alpha=0.3)
+    ax_c3.set_title(f'Power Spectrum of C3 Channel')
+    ax_c3.set_xlabel('Frequency [Hz]')
+    ax_c3.set_ylabel('Power/Frequency [V²/Hz]')
+    ax_c3.legend()
+    ax_c3.grid()
+    #Subplot for C4
+    ax_c4.plot(f_masked, psd_c4_left, label='Left Hand', color='blue')
+    ax_c4.plot(f_masked, psd_c4_right, label='Right Hand', color='orange')
+    ax_c4.fill_between(f_masked, std_c4_left - std_c4_left,std_c4_left + std_c4_left, alpha=0.3)
+    ax_c4.fill_between(f_masked, psd_c4_right - std_c4_right,psd_c4_right + std_c4_right, alpha=0.3)
+    ax_c4.set_title(f'Power Spectrum of C4 Channel')
+    ax_c4.set_xlabel('Frequency [Hz]')
+    ax_c4.set_ylabel('Power/Frequency [V²/Hz]')
+    ax_c4.legend()
+    ax_c4.grid()
+    plt.tight_layout()
+    plt.show()
+    
 
 
 def create_spectrogram(left_data, right_data, fs, baseline):
