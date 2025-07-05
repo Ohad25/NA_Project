@@ -1,13 +1,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.signal import welch
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from power_spectra import calculate_power_spectrum
-# Constants
 
-time_segments = [(1, 3),(1,2.5) ,(3, 5), (5, 6)]
-frequency_bands = [(6, 12), (12, 16),(16,20), (20, 25)]
+time_segments = [(1, 3), (1, 2.5), (3, 5), (5, 6)]
+frequency_bands = [(6, 12), (12, 16), (16, 20), (20, 25)]
+
 
 def psd_feature(frequencies, psd, frequency_band):
     """Calculates band power from a PSD array within a specified frequency range."""
@@ -26,7 +25,7 @@ def compute_band_features(dataset):
     feats_c3, feats_c4 = [], []
 
     for seg in time_segments:
-        frequencies, psd_c3, psd_c4 = calculate_power_spectrum(dataset,time_segment=seg)
+        frequencies, psd_c3, psd_c4 = calculate_power_spectrum(dataset, time_segment=seg)
         for band in frequency_bands:
             feats_c3.append(psd_feature(frequencies, psd_c3, band))
             feats_c4.append(psd_feature(frequencies, psd_c4, band))
@@ -44,7 +43,7 @@ def extract_time_features(trials):
         rms_forloop = np.sqrt(np.mean(trial**2, axis=0))
         var_forloop = np.var(trial, axis=0)
         feats_loop.append(np.array([rms_forloop, var_forloop]))
-    assert np.all(np.isclose(feats,np.array(feats_loop))), "Mismatch between vectorized and for-loop features"
+    assert np.all(np.isclose(feats, np.array(feats_loop))), "Mismatch between vectorized and for-loop features"
     return np.array(feats)  # (n_trials, 4)
 
 
@@ -75,8 +74,8 @@ def compute_entropy_features(dataset):
     ch3_entropy = np.empty((len(dataset.c3_data), len(time_segments)))
     ch4_entropy = np.empty((len(dataset.c4_data), len(time_segments)))
     
-    for i,seg in enumerate(time_segments):
-        ff3, pxx_c3, pxx_c4 = calculate_power_spectrum(dataset,time_segment=seg)
+    for i, seg in enumerate(time_segments):
+        ff3, pxx_c3, pxx_c4 = calculate_power_spectrum(dataset, time_segment=seg)
 
         entropy_ch3 = spectral_entropy_from_psd(pxx_c3)
         entropy_ch4 = spectral_entropy_from_psd(pxx_c4)
@@ -89,12 +88,11 @@ def compute_entropy_features(dataset):
     return ch3_entropy, ch4_entropy
 
 
-
 def create_features_matrix(dataset):
     """Extracts and concatenates all EEG features from the dataset for both classes."""
 
-    c3_band_feats,c4_band_feats = compute_band_features(dataset)
-    c3_time_feats,c4_time_feats = compute_time_features(dataset)
+    c3_band_feats, c4_band_feats = compute_band_features(dataset)
+    c3_time_feats, c4_time_feats = compute_time_features(dataset)
     c3_entropy_feats, c4_entropy_feats = compute_entropy_features(dataset)
 
     c3_feats = np.concatenate((c3_band_feats, c3_time_feats, c3_entropy_feats), axis=1)
@@ -108,9 +106,7 @@ def create_features_matrix(dataset):
         left = np.concatenate((c3_left_feats, c4_left_feats), axis=1)
         right = np.concatenate((c3_right_feats, c4_right_feats), axis=1)
         print("Left:", left.shape, "Right:", right.shape)
-        feats = (left,right)
-    
-        
+        feats = (left, right)
     else:
         feats = (c3_feats, c4_feats)
     
@@ -177,11 +173,10 @@ def plot_PCA(X_pca, y):
 
 def features(dataset):
     """Runs the full feature extraction pipeline and returns raw and PCA-reduced features with labels."""
-    features = create_features_matrix(dataset)
+    features_matrix = create_features_matrix(dataset)
    
     if dataset.train_mode:
-        left_features, right_features, = features
-
+        left_features, right_features, = features_matrix
         
         X_pca_2d, y_2d, pca_2d = calculate_PCA(left_features, right_features, n_components=2)
         X_pca_3d, y_3d, pca_3d = calculate_PCA(left_features, right_features, n_components=2)
@@ -189,6 +184,4 @@ def features(dataset):
         plot_PCA(X_pca_2d, y_2d)
         plot_PCA(X_pca_3d, y_3d)
 
-
-
-    return features
+    return features_matrix

@@ -8,14 +8,41 @@ from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.feature_selection import f_classif, RFE, SelectKBest
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import cross_val_score, StratifiedKFold, train_test_split
-from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-def load_test_data():
-    with open(r'motor_imagery_test_data.npy', 'rb') as f:  # TODO - add the file path!
-        labels_name = np.load(f, allow_pickle=True)
+
+def train_best_method(X_data, y_data, reducer, k):
+    """Build pipeline with LDA and given reducer (PCA, ANOVA, RFE)"""
+    if reducer == 'pca':
+        reducer_step = PCA(n_components=k, random_state=0)
+    elif reducer == 'anova':
+        reducer_step = SelectKBest(score_func=f_classif, k=k)
+    elif reducer == 'rfe':
+        # RFE needs a model with coef_ or feature_importances_
+        selector_model = LogisticRegression(max_iter=1000, solver='liblinear')
+        reducer_step = RFE(estimator=selector_model, n_features_to_select=k, step=1)
+    else:
+        raise ValueError("Reducer must be 'pca', 'anova' or 'rfe'")
+    if reducer == 'anova':
+        reducer = reducer_step.fit(X_data, y_data)
+        input = reducer.transform(X_data)
+    else:
+        scaler = StandardScaler()
+        norm_X = scaler.fit_transform(X_data)
+        reducer = reducer_step.fit(norm_X, y_data)
+        input = reducer.transform(norm_X)
+
+    lda = LinearDiscriminantAnalysis()
+    lda.fit(input, y_data)
+
+    return scaler, reducer, lda
+
+
+def test(test_ds, scaler, method, lda):
+    test_ds_scaled = scaler.transform(test_ds)
+    test_ds_reduced = method.transform(test_ds_scaled)
+    y_pred = lda.predict(test_ds_reduced)
+    return y_pred
 
 
 # Your code goes here
@@ -27,7 +54,6 @@ def main():
     # PART 1:
     train_dataset = MotorImageryDataset('motor_imagery_train_data.npy')
     train_dataset.reduce_baseline(1)
-    fs = train_dataset.fs
     visualization(train_dataset)
 
     # PART 2:
@@ -35,68 +61,29 @@ def main():
 
     # PART 3:
     train_features = features(train_dataset)
-    left_features,right_features = train_features
+    left_features, right_features = train_features
     X = np.concatenate((left_features, right_features), axis=0)
-    y = np.array([0]*len(left_features) + [1]*len(right_features))  # 0 = LEFT, 1 = RIGHT
+    y = np.array([0] * len(left_features) + [1] * len(right_features))  # 0 = LEFT, 1 = RIGHT
 
     # PART 4:
     best_method = classification(X, y)
     method, k = best_method['method'], best_method['features']
 
-    def train_best_method(X_data,y_data, reducer, k):
-        """Build pipeline with LDA and given reducer (PCA, ANOVA, RFE)"""
-        if reducer == 'pca':
-            reducer_step = PCA(n_components=k, random_state=0)
-        elif reducer == 'anova':
-            reducer_step = SelectKBest(score_func=f_classif, k=k)
-        elif reducer == 'rfe':
-            # RFE needs a model with coef_ or feature_importances_
-            selector_model = LogisticRegression(max_iter=1000, solver='liblinear')
-            reducer_step = RFE(estimator=selector_model, n_features_to_select=k, step=1)
-        else:
-            raise ValueError("Reducer must be 'pca', 'anova' or 'rfe'")
-        if reducer == 'anova':
-            reducer = reducer_step.fit(X_data, y_data)
-            input = reducer.transform(norm_X)
-        else:
-            scaler = StandardScaler()
-            norm_X = scaler.fit_transform(X_data)
-            reducer = reducer_step.fit(norm_X, y_data)
-            input = reducer.transform(norm_X)
-
-        lda = LinearDiscriminantAnalysis()
-        lda.fit(input, y_data)
-
-        return scaler,reducer, lda
-
-    def test(test_ds,scaler,method,lda):
-        test_ds_scaled = scaler.transform(test_ds)
-        test_ds_reduced = method.transform(test_ds_scaled)
-        y_pred = lda.predict(test_ds_reduced)
-        return y_pred
-
-    #Training + Testing
-    scaler,reducer, lda = train_best_method(X, y, method, k)
-    test_class = MotorImageryDataset('motor_imagery_test_data.npy',train_mode=False,fs=fs)
+    # Training + Testing
+    scaler, reducer, lda = train_best_method(X, y, method, k)
+    test_class = MotorImageryDataset('motor_imagery_test_data.npy', train_mode=False)
     test_class.reduce_baseline(1, train_mode=False)
 
     c3_features, c4_features = features(test_class)
     # Concatenate left and right features for testing
     ts = np.concatenate((c3_features, c4_features), axis=1)
-    
 
-    y_pred = test(ts,scaler,reducer, lda)
+    y_pred = test(ts, scaler, reducer, lda)
     print(f"Using {method} with {k} features, the test predictions are:\n {y_pred}")
 
-
-        # Save to disk
+    # Save to disk
     np.save('y_pred.npy', y_pred)
     print("Saved predictions to y_pred.npy")
-
-        
-        
-
-
 
 
 if __name__ == "__main__":

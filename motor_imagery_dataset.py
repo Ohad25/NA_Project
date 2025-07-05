@@ -5,7 +5,7 @@ from typing import Tuple
 class MotorImageryDataset:
     """Handles loading and accessing EEG motor imagery data from C3 and C4 channels."""
 
-    def __init__(self, filepath: str,train_mode=True,fs=None):
+    def __init__(self, filepath: str, train_mode=True):
         """Initializes the dataset and loads data from the given file path."""
         self.filepath = filepath
         self.train_mode = train_mode
@@ -14,7 +14,16 @@ class MotorImageryDataset:
         self.channel_names = {0: 'C3', 1: 'C4'}
         self.fs = 128
 
-    def _load_data(self,train_mode=True):
+        self.data_right = None
+        self.data_left = None
+        self.c3_data = None
+        self.c4_data = None
+        self.c3_right = None
+        self.c3_left = None
+        self.c4_right = None
+        self.c4_left = None
+
+    def _load_data(self, train_mode=True):
         """Loads EEG signals, labels, and trial metadata from the .npy file."""
         with open(self.filepath, 'rb') as f:
             data = np.load(f, allow_pickle=True)
@@ -43,14 +52,6 @@ class MotorImageryDataset:
             self.c3_data = self.data[:, :, 0]
             self.c4_data = self.data[:, :, 1]
 
-    def get_all(self) \
-            -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
-        """Returns all raw data arrays, labels, and sampling frequency."""
-        return (self.data_left, self.data_right,
-                self.c3_left, self.c3_right,
-                self.c4_left, self.c4_right,
-                self.labels_name, self.fs)
-
     def get_windowed_data(self, t_min: float, t_max: float) -> dict:
         """Returns a dictionary of data cropped to the specified time window for each channel."""
         if not (0 <= t_min < t_max):
@@ -68,15 +69,16 @@ class MotorImageryDataset:
             'fs': self.fs,
         }
     
-    def reduce_baseline(self,baseline: np.ndarray,train_mode=True) -> np.ndarray:
+    def reduce_baseline(self, baseline, train_mode=True):
         """Computes the mean mV for each channel in the baseline and returns the reduced baseline.
         Args: baseline: int - time (seconds)"""
 
         t = baseline * self.fs
         if t < 0 or t >= self.data.shape[1]:
-            raise ValueError(f"Baseline time must be within the data range: 0 to {self.data.shape[1] / self.fs} seconds")
-        baseline_data_c3 = self.data[:, :int(t),0]
-        baseline_data_c4 = self.data[:, :int(t),1]
+            raise ValueError(f"Baseline time must be within the data range: "
+                             f"0 to {self.data.shape[1] / self.fs} seconds")
+        baseline_data_c3 = self.data[:, :int(t), 0]
+        baseline_data_c4 = self.data[:, :int(t), 1]
         baseline_c3 = np.mean(baseline_data_c3, axis=1)
         baseline_c4 = np.mean(baseline_data_c4, axis=1)
         self.data[:, :, 0] -= baseline_c3[:, np.newaxis]
@@ -93,11 +95,3 @@ class MotorImageryDataset:
 
         self.c3_data = self.data[:, :, 0]
         self.c4_data = self.data[:, :, 1]
-        
-    def __repr__(self):
-        """Returns a summary string representation of the dataset."""
-        return (f"MotorImageryDataset(\n"
-                f"  filepath={self.filepath},\n"
-                f"  fs={self.fs} Hz,\n"
-                f"  left_trials={len(self.left_indices)}, right_trials={len(self.right_indices)}\n"
-                f")")

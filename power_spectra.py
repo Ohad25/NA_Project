@@ -4,9 +4,7 @@ import numpy as np
 from scipy.signal import welch
 
 
-
-
-def calculate_power_spectrum(dataset,time_segment:tuple):
+def calculate_power_spectrum(dataset, time_segment: tuple):
     """Computes the Welch power spectrum for left and right trials of a given EEG channel and time segment."""
     t0, t1 = time_segment
     windowed = dataset.get_windowed_data(t0, t1)
@@ -20,7 +18,8 @@ def calculate_power_spectrum(dataset,time_segment:tuple):
 
     return f, psd_c3, psd_c4
 
-def plot_power_spectrum(dataset,f, psd_c3,psd_c4,plot_limit:tuple=None):
+
+def plot_power_spectrum(dataset, f, psd_c3, psd_c4, plot_limit: tuple = None):
     
     left_indices = dataset.left_indices
     right_indices = dataset.right_indices
@@ -36,42 +35,39 @@ def plot_power_spectrum(dataset,f, psd_c3,psd_c4,plot_limit:tuple=None):
     else:
         start_freq = f[0]
         end_freq = f[-1]
-    mask = (f >= start_freq) & (f <= end_freq) #Take only the frequencies in the specified range
+    mask = (f >= start_freq) & (f <= end_freq)  # Take only the frequencies in the specified range
     f_masked = f[mask]
 
-
-    psd_c3_left = np.mean(psd_c3_left,axis=0)[mask]  # Average across trials
-    psd_c3_right = np.mean(psd_c3_right,axis=0)[mask]  # Average across trials
-    psd_c4_left = np.mean(psd_c4_left,axis=0)[mask]  # Average across trials
-    psd_c4_right = np.mean(psd_c4_right,axis=0)[mask]  # Average across trials
-
+    psd_c3_left = np.mean(psd_c3_left, axis=0)[mask]  # Average across trials
+    psd_c3_right = np.mean(psd_c3_right, axis=0)[mask]  # Average across trials
+    psd_c4_left = np.mean(psd_c4_left, axis=0)[mask]  # Average across trials
+    psd_c4_right = np.mean(psd_c4_right, axis=0)[mask]  # Average across trials
 
     std_c3_left = np.std(psd_c3_left, axis=0)
     std_c3_right = np.std(psd_c3_left, axis=0)
     std_c4_left = np.std(psd_c4_left, axis=0)
     std_c4_right = np.std(psd_c4_right, axis=0)
 
-
     # Plotting the power spectrum for C3 and C4 channels
     fig, axes = plt.subplots(2, 1, figsize=(15, 10))
     ax_c3 = axes[0]
     ax_c4 = axes[1]
 
-    #Subplot for C3
-    ax_c3.plot(f_masked,psd_c3_left, label='Left Hand', color='blue')
+    # Subplot for C3
+    ax_c3.plot(f_masked, psd_c3_left, label='Left Hand', color='blue')
     ax_c3.plot(f_masked, psd_c3_right, label='Right Hand', color='orange')
-    ax_c3.fill_between(f_masked, psd_c3_left - std_c3_left,psd_c3_left + std_c3_left, alpha=0.3)
-    ax_c3.fill_between(f_masked, psd_c3_right - std_c3_right,psd_c3_right + std_c3_right, alpha=0.3)
+    ax_c3.fill_between(f_masked, psd_c3_left - std_c3_left, psd_c3_left + std_c3_left, alpha=0.3)
+    ax_c3.fill_between(f_masked, psd_c3_right - std_c3_right, psd_c3_right + std_c3_right, alpha=0.3)
     ax_c3.set_title(f'Power Spectrum of C3 Channel')
     ax_c3.set_xlabel('Frequency [Hz]')
     ax_c3.set_ylabel('Power/Frequency [V²/Hz]')
     ax_c3.legend()
     ax_c3.grid()
-    #Subplot for C4
+    # Subplot for C4
     ax_c4.plot(f_masked, psd_c4_left, label='Left Hand', color='blue')
     ax_c4.plot(f_masked, psd_c4_right, label='Right Hand', color='orange')
-    ax_c4.fill_between(f_masked, std_c4_left - std_c4_left,std_c4_left + std_c4_left, alpha=0.3)
-    ax_c4.fill_between(f_masked, psd_c4_right - std_c4_right,psd_c4_right + std_c4_right, alpha=0.3)
+    ax_c4.fill_between(f_masked, std_c4_left - std_c4_left, std_c4_left + std_c4_left, alpha=0.3)
+    ax_c4.fill_between(f_masked, psd_c4_right - std_c4_right, psd_c4_right + std_c4_right, alpha=0.3)
     ax_c4.set_title(f'Power Spectrum of C4 Channel')
     ax_c4.set_xlabel('Frequency [Hz]')
     ax_c4.set_ylabel('Power/Frequency [V²/Hz]')
@@ -79,7 +75,6 @@ def plot_power_spectrum(dataset,f, psd_c3,psd_c4,plot_limit:tuple=None):
     ax_c4.grid()
     plt.tight_layout()
     plt.show()
-    
 
 
 def create_spectrogram(left_data, right_data, fs, baseline):
@@ -93,7 +88,7 @@ def create_spectrogram(left_data, right_data, fs, baseline):
     baseline_mask = t <= baseline  # The assignment says to use the first second as baseline, but we start at 1 seconds
     # Average across time baseline period:
     baseline_Sxx_left = np.mean(psd_left[:, :, baseline_mask])  # Select the first second of the spectrogram
-    baseline_Sxx_right = np.mean(psd_right[:, :, baseline_mask])  # Select the first second of the spectrogram\
+    baseline_Sxx_right = np.mean(psd_right[:, :, baseline_mask])  # Select the first second of the spectrogram
 
     output['left'] = (f, t, psd_left)
     output['right'] = (f2, t2, psd_right)
@@ -139,8 +134,6 @@ def power_spectra(dataset):
     baseline = 1  # First second as baseline
     sg3_info = create_spectrogram(dataset.c3_left, dataset.c3_right, dataset.fs, baseline)
     sg4_info = create_spectrogram(dataset.c4_left, dataset.c4_right, dataset.fs, baseline)
-
-    
 
     data_sg = ['left', 'right', 'baseline_left', 'baseline_right', 'difference']
     plot_spectrogram(sg3_info, data_sg, channel=3, trial=0, mean=True)

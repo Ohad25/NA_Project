@@ -1,16 +1,14 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import random
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.feature_selection import f_classif, RFE, SelectKBest
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
-from sklearn.model_selection import cross_val_score, StratifiedKFold, train_test_split
+from sklearn.model_selection import cross_val_score, StratifiedKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.utils import shuffle
 
 
 def cross_validate_LDA(X_train_val, y_train_val, k=10):
@@ -24,7 +22,6 @@ def cross_validate_LDA(X_train_val, y_train_val, k=10):
 
     print(f"{k}-Fold CV Accuracy on training set: {np.mean(scores)*100:.2f} ± {np.std(scores)*100:.2f}%")
     lda.fit(X_scaled, y_train_val)
-    return lda, scaler
 
 
 def train_and_test_on_holdout(X_test, y_test, lda, scaler):
@@ -39,7 +36,7 @@ def train_and_test_on_holdout(X_test, y_test, lda, scaler):
 
 def try_parameters(X, y):
     """Run a parameter sweep with PCA, ANOVA, and RFE to evaluate LDA performance."""
-    results,best_method = feature_reduction_search(X, y, max_k=40)
+    results, best_method = feature_reduction_search(X, y, max_k=40)
     results_df = pd.DataFrame(results)
 
     plot_parameter_search(results_df)
@@ -67,14 +64,15 @@ def feature_reduction_search(X, y, max_k=40):
 
     best_results = sorted(results, key=lambda x: x['accuracy'], reverse=True)
     best_acc_result = best_results[0]  # Highest accuracy
-    best = [r for r in best_results if np.isclose(r['accuracy'],best_acc_result['accuracy'],atol=1e-2,rtol=0)]
-    best = sorted(best, key=lambda x: x['std'])[0] #Find the highest accuracy with lowest std
+    best = [r for r in best_results if np.isclose(r['accuracy'], best_acc_result['accuracy'], atol=1e-2, rtol=0)]
+    best = sorted(best, key=lambda x: x['std'])[0]  # Find the highest accuracy with lowest std
 
     print(f"\nBest result:")
     print(f"For accuracy the best Method: {best_acc_result['method']}, Features: {best_acc_result['features']}")
     print(f"For std the best Method: {best['method']}, Features: {best['features']}")
     print(f"K-fold mean Accuracy: {best_acc_result['accuracy'] * 100:.2f}% ± {best_acc_result['std'] * 100:.2f}%")
-    print(f"Maximum accuracy with Minimum std method: {best['accuracy'] * 100:.2f}% ± {best['std'] * 100:.2f}% \n for {best['method']} with {best['features']} features")
+    print(f"Maximum accuracy with Minimum std method: {best['accuracy'] * 100:.2f}% ± "
+          f"{best['std'] * 100:.2f}% \n for {best['method']} with {best['features']} features")
     return results, best
 
 
@@ -93,9 +91,9 @@ def evaluate_pipeline(X, y, reducer, k):
 
     if reducer == 'anova':
         pipe = Pipeline([
-        ('reduce', reducer_step),
-        ('lda', LinearDiscriminantAnalysis())
-    ])
+            ('reduce', reducer_step),
+            ('lda', LinearDiscriminantAnalysis())
+        ])
     
     else:
         pipe = Pipeline([
@@ -132,11 +130,10 @@ def classification(X, y):
     if original raw features are provided."""
 
     # Cross validation over the whole dataset
-    lda, scaler = cross_validate_LDA(X, y, k=10)
+    cross_validate_LDA(X, y, k=10)
 
     # Search for best feature reduction method and parameters
     best_method = try_parameters(X, y)
     print("\nParameter search results:")
     print(f"The prediction for the test dataset are:\n {best_method}")
     return best_method
-
