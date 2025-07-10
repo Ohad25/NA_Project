@@ -6,7 +6,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.feature_selection import f_classif, RFE, SelectKBest
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
-from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.model_selection import cross_validate, StratifiedKFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -17,10 +17,12 @@ def cross_validate_LDA(X_train_val, y_train_val, k=10):
     X_scaled = scaler.fit_transform(X_train_val)
 
     lda = LinearDiscriminantAnalysis()
-    cv = StratifiedKFold(n_splits=k, shuffle=False)
-    scores = cross_val_score(lda, X_scaled, y_train_val, cv=cv)
-
-    print(f"{k}-Fold CV Accuracy on training set: {np.mean(scores)*100:.2f} ± {np.std(scores)*100:.2f}%")
+    cv = StratifiedKFold(n_splits=k, shuffle=True)
+    scores = cross_validate(lda, X_scaled, y_train_val, cv=cv, return_train_score=True)
+    val_scores = scores['test_score']
+    train_scores = scores['train_score']
+    print(f"{k}-Fold CV Accuracy on training set: {np.mean(train_scores)*100:.2f} ± {np.std(train_scores)*100:.2f}%")
+    print(f"{k}-Fold CV Accuracy on Held out set: {np.mean(val_scores) * 100:.2f} ± {np.std(val_scores) * 100:.2f}%")
     lda.fit(X_scaled, y_train_val)
 
 
@@ -68,9 +70,6 @@ def feature_reduction_search(X, y, max_k=40):
     best = sorted(best, key=lambda x: x['std'])[0]  # Find the highest accuracy with lowest std
 
     print(f"\nBest result:")
-    print(f"For accuracy the best Method: {best_acc_result['method']}, Features: {best_acc_result['features']}")
-    print(f"For std the best Method: {best['method']}, Features: {best['features']}")
-    print(f"K-fold mean Accuracy: {best_acc_result['accuracy'] * 100:.2f}% ± {best_acc_result['std'] * 100:.2f}%")
     print(f"Maximum accuracy with Minimum std method: {best['accuracy'] * 100:.2f}% ± "
           f"{best['std'] * 100:.2f}% \n for {best['method']} with {best['features']} features")
     return results, best

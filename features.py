@@ -33,7 +33,7 @@ def compute_band_features(dataset):
     return np.array(feats_c3).T, np.array(feats_c4).T  # (n_trials, time_segments * frequency_bands)
 
 
-def extract_time_features(trials):
+def extract_time_domain_features(trials):
     """Computes RMS and variance features for each EEG trial."""
     feats_loop = []
     rms = np.sqrt(np.mean(trials**2, axis=1))  # RMS for each trial
@@ -47,14 +47,14 @@ def extract_time_features(trials):
     return np.array(feats)  # (n_trials, 4)
 
 
-def compute_time_features(dataset):
+def compute_time_domain_features(dataset):
     """Extracts RMS and variance features for left and right trials of a specific EEG channel."""
 
     c3_trials = dataset.c3_data
     c4_trials = dataset.c4_data
 
-    c3_feats = extract_time_features(c3_trials)
-    c4_feats = extract_time_features(c4_trials)
+    c3_feats = extract_time_domain_features(c3_trials)
+    c4_feats = extract_time_domain_features(c4_trials)
 
     return c3_feats, c4_feats
 
@@ -80,23 +80,71 @@ def compute_entropy_features(dataset):
         entropy_ch3 = spectral_entropy_from_psd(pxx_c3)
         entropy_ch4 = spectral_entropy_from_psd(pxx_c4)
 
-        entropy_left4 = spectral_entropy_from_psd(entropy_ch3)
-        entropy_right4 = spectral_entropy_from_psd(entropy_ch4)
-        ch3_entropy[:, i] = entropy_left4
-        ch4_entropy[:, i] = entropy_right4
+        entropy_c3 = spectral_entropy_from_psd(entropy_ch3)
+        entropy_c4 = spectral_entropy_from_psd(entropy_ch4)
+        ch3_entropy[:, i] = entropy_c3
+        ch4_entropy[:, i] = entropy_c4
 
     return ch3_entropy, ch4_entropy
+
+
+def plot_features_histogram(dataset, c3_feats, c4_feats, channels, per_page=8):
+    """Plot histograms of feature distributions for LEFT and RIGHT classes, paginated by `per_page` plots per figure."""
+
+    c3_left_feats = c3_feats[dataset.left_indices]
+    c3_right_feats = c3_feats[dataset.right_indices]
+    c4_left_feats = c4_feats[dataset.left_indices]
+    c4_right_feats = c4_feats[dataset.right_indices]
+    left_feats = np.concatenate((c3_left_feats, c4_left_feats), axis=1)
+    right_feats = np.concatenate((c3_right_feats, c4_right_feats), axis=1)
+
+    # Calculate feature discriminability (absolute mean difference)
+    mean_diff = np.abs(left_feats.mean(axis=0) - right_feats.mean(axis=0))
+
+    # Select feature indices
+    feature_indices = np.arange(left_feats.shape[1])  # all features
+
+    # Build feature name list (must match the feature extraction order!)
+    feature_names = []
+    for ch in channels:
+        for seg in time_segments:
+            for band in frequency_bands:
+                feature_names.append(f"{ch} | {seg[0]}-{seg[1]}s | {band[0]}-{band[1]}Hz")
+        feature_names.append(f"{ch} | time domain | RMS")
+        feature_names.append(f"{ch} | time domain | var")
+
+    # Plot histograms page by page
+    total = len(feature_indices)
+    num_pages = int(np.ceil(total / per_page))
+
+    for page in range(num_pages):
+        start = page * per_page
+        end = min(start + per_page, total)
+        plt.figure(figsize=(20, 10))
+
+        for i, idx in enumerate(feature_indices[start:end]):
+            plt.subplot(2, (per_page + 1) // 2, i + 1)
+            plt.hist(left_feats[:, idx], bins=20, alpha=0.6, label='LEFT', color='red')
+            plt.hist(right_feats[:, idx], bins=20, alpha=0.6, label='RIGHT', color='blue')
+            plt.title(f"{feature_names[idx]}, mean: {np.around(mean_diff[idx], decimals=3)}", fontsize=10)
+            plt.xlabel("Value")
+            plt.ylabel("Density")
+            plt.legend()
+            plt.grid(True)
+
+        plt.tight_layout()
+        plt.show()
 
 
 def create_features_matrix(dataset):
     """Extracts and concatenates all EEG features from the dataset for both classes."""
 
     c3_band_feats, c4_band_feats = compute_band_features(dataset)
-    c3_time_feats, c4_time_feats = compute_time_features(dataset)
+    c3_time_domain_feats, c4_time_domain_feats = compute_time_domain_features(dataset)
     c3_entropy_feats, c4_entropy_feats = compute_entropy_features(dataset)
 
-    c3_feats = np.concatenate((c3_band_feats, c3_time_feats, c3_entropy_feats), axis=1)
-    c4_feats = np.concatenate((c4_band_feats, c4_time_feats, c4_entropy_feats), axis=1)
+    c3_feats = np.concatenate((c3_band_feats, c3_time_domain_feats, c3_entropy_feats), axis=1)
+    c4_feats = np.concatenate((c4_band_feats, c4_time_domain_feats, c4_entropy_feats), axis=1)
 
     if dataset.train_mode:
         c3_left_feats = c3_feats[dataset.left_indices]
@@ -105,11 +153,15 @@ def create_features_matrix(dataset):
         c4_right_feats = c4_feats[dataset.right_indices]
         left = np.concatenate((c3_left_feats, c4_left_feats), axis=1)
         right = np.concatenate((c3_right_feats, c4_right_feats), axis=1)
-        print("Left:", left.shape, "Right:", right.shape)
         feats = (left, right)
+
+        # Plot best histograms
+        c3_feats = np.concatenate((c3_band_feats, c3_time_domain_feats), axis=1)
+        c4_feats = np.concatenate((c4_band_feats, c4_time_domain_feats), axis=1)
+        plot_features_histogram(dataset, c3_feats, c4_feats, dataset.channel_names.values())
     else:
         feats = (c3_feats, c4_feats)
-    
+
     return feats
 
 
@@ -179,7 +231,7 @@ def features(dataset):
         left_features, right_features, = features_matrix
         
         X_pca_2d, y_2d, pca_2d = calculate_PCA(left_features, right_features, n_components=2)
-        X_pca_3d, y_3d, pca_3d = calculate_PCA(left_features, right_features, n_components=2)
+        X_pca_3d, y_3d, pca_3d = calculate_PCA(left_features, right_features, n_components=3)
 
         plot_PCA(X_pca_2d, y_2d)
         plot_PCA(X_pca_3d, y_3d)

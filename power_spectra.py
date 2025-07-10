@@ -20,7 +20,7 @@ def calculate_power_spectrum(dataset, time_segment: tuple):
 
 
 def plot_power_spectrum(dataset, f, psd_c3, psd_c4, plot_limit: tuple = None):
-    
+    """Plot power spectrum with 1-standard-deviation"""
     left_indices = dataset.left_indices
     right_indices = dataset.right_indices
     psd_c3_left = psd_c3[left_indices]
@@ -66,7 +66,7 @@ def plot_power_spectrum(dataset, f, psd_c3, psd_c4, plot_limit: tuple = None):
     # Subplot for C4
     ax_c4.plot(f_masked, psd_c4_left, label='Left Hand', color='blue')
     ax_c4.plot(f_masked, psd_c4_right, label='Right Hand', color='orange')
-    ax_c4.fill_between(f_masked, std_c4_left - std_c4_left, std_c4_left + std_c4_left, alpha=0.3)
+    ax_c4.fill_between(f_masked, psd_c4_left - std_c4_left, psd_c4_left + std_c4_left, alpha=0.3)
     ax_c4.fill_between(f_masked, psd_c4_right - std_c4_right, psd_c4_right + std_c4_right, alpha=0.3)
     ax_c4.set_title(f'Power Spectrum of C4 Channel')
     ax_c4.set_xlabel('Frequency [Hz]')
@@ -120,7 +120,7 @@ def plot_spectrogram(spectrogram_data, data_Sxx, trial, channel, mean=True):
         ax.set_title(f'Spectrogram for Channel {channel} ({data})')
         ax.set_ylabel('Frequency [Hz]')
         ax.set_xlabel('Time [s]')
-        ax.set_ylim(0, 30)  # Limit the frequency range
+        ax.set_ylim(0, 20)  # Limit the frequency range
 
         cbar = fig.colorbar(im)
         cbar.set_label('power per Hz ', fontsize=12)  # If you change to decibels, change this to 'dB'

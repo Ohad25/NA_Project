@@ -10,6 +10,8 @@ from sklearn.feature_selection import f_classif, RFE, SelectKBest
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
+from power_spectra import calculate_power_spectrum, plot_power_spectrum
+
 
 def train_best_method(X_data, y_data, reducer, k):
     """Build pipeline with LDA and given reducer (PCA, ANOVA, RFE)"""
@@ -57,6 +59,8 @@ def main():
     visualization(train_dataset)
 
     # PART 2:
+    f, psd_c3, psd_c4 = calculate_power_spectrum(train_dataset, (2.15, 6))
+    plot_power_spectrum(train_dataset, f, psd_c3, psd_c4)
     power_spectra(train_dataset)
 
     # PART 3:
