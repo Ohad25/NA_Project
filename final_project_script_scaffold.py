@@ -41,6 +41,7 @@ def train_best_method(X_data, y_data, reducer, k):
 
 
 def test(test_ds, scaler, method, lda):
+    """Applies scaling, dimensionality reduction, and LDA prediction to the test dataset."""
     test_ds_scaled = scaler.transform(test_ds)
     test_ds_reduced = method.transform(test_ds_scaled)
     y_pred = lda.predict(test_ds_reduced)
@@ -49,9 +50,6 @@ def test(test_ds, scaler, method, lda):
 
 # Your code goes here
 
-# TODO:Remember to plot the channel in subplots and not separately
-# TODO: Compare the power spectra of both classes.
-#  Are there any frequency bands that seem useful for separating the classes?
 def main():
     # PART 1:
     train_dataset = MotorImageryDataset('motor_imagery_train_data.npy')

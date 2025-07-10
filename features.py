@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+
 from power_spectra import calculate_power_spectrum
 
 time_segments = [(1, 3), (1, 2.5), (3, 5), (5, 6)]
